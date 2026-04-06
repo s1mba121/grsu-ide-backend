@@ -1,0 +1,91 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: grsu
+      POSTGRES_PASSWORD: grsu_secret
+      POSTGRES_DB: grsu_ide
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
+      JWT_ACCESS_SECRET: dev_access_secret_change_in_prod
+      JWT_REFRESH_SECRET: dev_refresh_secret_change_in_prod
+      NODE_ENV: development
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./services/auth-service/src
+          target: /app/src
+
+  fs-service:
+    build:
+      context: ./services/fs-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
+      STORAGE_PATH: /storage
+      NODE_ENV: development
+    ports:
+      - "3002:3002"
+    volumes:
+      - fs_storage:/storage
+    depends_on:
+      - postgres
+
+  task-service:
+    build:
+      context: ./services/task-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3003
+      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
+      FS_SERVICE_URL: http://fs-service:3002
+      RUNNER_SERVICE_URL: http://runner-service:3004
+      NODE_ENV: development
+    ports:
+      - "3003:3003"
+    depends_on:
+      - postgres
+      - fs-service
+
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    environment:
+      PORT: 4000
+      JWT_ACCESS_SECRET: dev_access_secret_change_in_prod
+      AUTH_SERVICE_URL: http://auth-service:3001
+      FS_SERVICE_URL: http://fs-service:3002
+      TASK_SERVICE_URL: http://task-service:3003
+      RUNNER_SERVICE_URL: http://runner-service:3004
+      NODE_ENV: development
+    ports:
+      - "4000:4000"
+    depends_on:
+      - auth-service
+
+volumes:
+  postgres_data:
+  fs_storage:

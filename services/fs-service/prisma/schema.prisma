@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Project {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  taskId     String?  @map("task_id")
+  name       String   @db.VarChar(255)
+  language   Language @default(python)
+  isReadonly Boolean  @default(false) @map("is_readonly")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("projects")
+}
+
+enum Language {
+  python
+  javascript
+}

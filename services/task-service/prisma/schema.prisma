@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  title          String     @db.VarChar(255)
+  description    String     @db.Text
+  language       Language   @default(python)
+  templateCode   String     @db.Text @map("template_code")
+  timeLimitMin   Int        @default(60) @map("time_limit_min")
+  createdBy      String     @map("created_by")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  testCases      TestCase[]
+  exams          Exam[]
+
+  @@map("tasks")
+}
+
+model TestCase {
+  id             String  @id @default(uuid())
+  taskId         String  @map("task_id")
+  task           Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  input          String  @db.Text
+  expectedOutput String  @db.Text @map("expected_output")
+  isHidden       Boolean @default(true) @map("is_hidden")
+  points         Int     @default(1)
+  orderIndex     Int     @default(0) @map("order_index")
+
+  @@map("test_cases")
+}
+
+model Exam {
+  id           String        @id @default(uuid())
+  taskId       String        @map("task_id")
+  task         Task          @relation(fields: [taskId], references: [id])
+  title        String        @db.VarChar(255)
+  inviteToken  String        @unique @db.VarChar(64) @map("invite_token")
+  openMode     OpenMode      @default(manual) @map("open_mode")
+  startsAt     DateTime?     @map("starts_at")
+  endsAt       DateTime?     @map("ends_at")
+  status       ExamStatus    @default(draft)
+  createdBy    String        @map("created_by")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  participants ExamParticipant[]
+  sessions     ExamSession[]
+
+  @@map("exams")
+}
+
+model ExamParticipant {
+  id       String   @id @default(uuid())
+  examId   String   @map("exam_id")
+  exam     Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  userId   String   @map("user_id")
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  @@unique([examId, userId])
+  @@map("exam_participants")
+}
+
+model ExamSession {
+  id             String        @id @default(uuid())
+  examId         String        @map("exam_id")
+  exam           Exam          @relation(fields: [examId], references: [id])
+  userId         String        @map("user_id")
+  projectId      String        @map("project_id")
+  startedAt      DateTime      @default(now()) @map("started_at")
+  finishedAt     DateTime?     @map("finished_at")
+  status         SessionStatus @default(in_progress)
+  warningsCount  Int           @default(0) @map("warnings_count")
+  antiCheatLogs  AntiCheatLog[]
+  submission     Submission?
+
+  @@unique([examId, userId])
+  @@map("exam_sessions")
+}
+
+model AntiCheatLog {
+  id          String          @id @default(uuid())
+  sessionId   String          @map("session_id")
+  session     ExamSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId      String          @map("user_id")
+  eventType   AntiCheatEvent  @map("event_type")
+  occurredAt  DateTime        @default(now()) @map("occurred_at")
+  details     Json?
+
+  @@map("anticheat_logs")
+}
+
+model Submission {
+  id          String          @id @default(uuid())
+  sessionId   String          @unique @map("session_id")
+  session     ExamSession     @relation(fields: [sessionId], references: [id])
+  userId      String          @map("user_id")
+  taskId      String          @map("task_id")
+  score       Int             @default(0)
+  maxScore    Int             @default(0) @map("max_score")
+  status      SubmissionStatus
+  resultsJson Json            @map("results_json")
+  submittedAt DateTime        @default(now()) @map("submitted_at")
+
+  @@map("submissions")
+}
+
+enum Language {
+  python
+  javascript
+}
+
+enum OpenMode {
+  manual
+  scheduled
+}
+
+enum ExamStatus {
+  draft
+  active
+  closed
+}
+
+enum SessionStatus {
+  in_progress
+  submitted
+  disqualified
+}
+
+enum AntiCheatEvent {
+  tab_blur
+  window_minimize
+  paste_attempt
+  devtools_open
+}
+
+enum SubmissionStatus {
+  passed
+  partial
+  failed
+  error
+}

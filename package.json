@@ -1,0 +1,13 @@
+{
+  "name": "grsu-ide-backend",
+  "private": true,
+  "workspaces": [
+    "shared/types",
+    "services/*"
+  ],
+  "scripts": {
+    "dev:auth": "npm run dev --workspace=services/auth-service",
+    "dev:gateway": "npm run dev --workspace=services/gateway",
+    "build": "npm run build --workspaces"
+  }
+}

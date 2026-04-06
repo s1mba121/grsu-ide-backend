@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Group {
+  id        String   @id @default(uuid())
+  name      String   @unique @db.VarChar(100)
+  createdAt DateTime @default(now()) @map("created_at")
+  users     User[]
+
+  @@map("groups")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique @db.VarChar(255)
+  fullName     String    @db.VarChar(255) @map("full_name")
+  passwordHash String    @db.VarChar(255) @map("password_hash")
+  role         Role      @default(student)
+  groupId      String?   @map("group_id")
+  group        Group?    @relation(fields: [groupId], references: [id])
+  createdAt    DateTime  @default(now()) @map("created_at")
+  tokens       RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique @db.VarChar(255) @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("refresh_tokens")
+}
+
+enum Role {
+  student
+  teacher
+  admin
+}

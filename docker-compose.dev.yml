@@ -1,4 +1,4 @@
-version: '3.9'
+# version: '3.9'
 
 services:
   postgres:
@@ -19,8 +19,8 @@ services:
 
   auth-service:
     build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+      context: .                              # ← корень монорепо
+      dockerfile: services/auth-service/Dockerfile
     environment:
       PORT: 3001
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
@@ -39,8 +39,8 @@ services:
 
   fs-service:
     build:
-      context: ./services/fs-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/fs-service/Dockerfile
     environment:
       PORT: 3002
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
@@ -55,8 +55,8 @@ services:
 
   task-service:
     build:
-      context: ./services/task-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/task-service/Dockerfile
     environment:
       PORT: 3003
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
@@ -71,8 +71,8 @@ services:
 
   gateway:
     build:
-      context: ./services/gateway
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/gateway/Dockerfile
     environment:
       PORT: 4000
       JWT_ACCESS_SECRET: dev_access_secret_change_in_prod
@@ -88,8 +88,8 @@ services:
 
   runner-service:
     build:
-      context: ./services/runner-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/runner-service/Dockerfile
     environment:
       PORT: 3004
       REDIS_URL: redis://redis:6379

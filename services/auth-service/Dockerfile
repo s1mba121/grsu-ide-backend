@@ -1,18 +1,31 @@
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-COPY prisma ./prisma
-RUN npm install
-RUN npx prisma generate
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
+# services/auth-service/Dockerfile
+FROM node:20-alpine
 
-FROM node:20-alpine AS runner
+# Установка OpenSSL
+RUN apk add --no-cache openssl
+
+# Создание символических ссылок для совместимости
+RUN ln -sf /usr/lib/libssl.so.3 /usr/lib/libssl.so.1.1 && \
+    ln -sf /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.1.1
+
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
+
+# Копируем только необходимые файлы для установки зависимостей
+COPY package*.json ./
+COPY shared/types ./shared/types
+COPY services/auth-service/package*.json ./services/auth-service/
+
+# Установка зависимостей
+RUN npm install
+
+# Копируем исходный код сервиса
+COPY services/auth-service ./services/auth-service
+
+WORKDIR /app/services/auth-service
+
+# Генерация Prisma Client
+RUN npx prisma generate
+
 EXPOSE 3001
-CMD ["node", "dist/index.js"]
+
+CMD ["npx", "tsx", "src/index.ts"]

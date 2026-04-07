@@ -1,18 +1,28 @@
 FROM node:20-alpine AS builder
+RUN apk add --no-cache openssl && \
+    ln -s /usr/lib/libssl.so.3 /usr/lib/libssl.so.1.1 && \
+    ln -s /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.1.1
 WORKDIR /app
 COPY package*.json ./
-COPY prisma ./prisma
-RUN npm install
+COPY shared/types ./shared/types
+COPY services/task-service/package*.json ./services/task-service/
+RUN npm install --workspace=services/task-service
+COPY services/task-service ./services/task-service
+WORKDIR /app/services/task-service
 RUN npx prisma generate
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:20-alpine
+RUN apk add --no-cache openssl && \
+    ln -s /usr/lib/libssl.so.3 /usr/lib/libssl.so.1.1 && \
+    ln -s /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.1.1
+
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/dist ./dist
+
+# Копируем node_modules из корня (там лежит .prisma)
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/shared ./shared
+COPY --from=builder /app/services/task-service ./services/task-service
+
+WORKDIR /app/services/task-service
 EXPOSE 3003
-CMD ["node", "dist/index.js"]
+CMD ["npx", "tsx", "src/index.ts"]

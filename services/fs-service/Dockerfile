@@ -1,20 +1,28 @@
 FROM node:20-alpine AS builder
+RUN apk add --no-cache openssl && \
+    ln -s /usr/lib/libssl.so.3 /usr/lib/libssl.so.1.1 && \
+    ln -s /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.1.1
 WORKDIR /app
 COPY package*.json ./
-COPY prisma ./prisma
-RUN npm install
+COPY shared/types ./shared/types
+COPY services/fs-service/package*.json ./services/fs-service/
+RUN npm install --workspace=services/fs-service
+COPY services/fs-service ./services/fs-service
+WORKDIR /app/services/fs-service
 RUN npx prisma generate
-COPY tsconfig.json ./
-COPY src ./src
-RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:20-alpine
+RUN apk add --no-cache openssl && \
+    ln -s /usr/lib/libssl.so.3 /usr/lib/libssl.so.1.1 && \
+    ln -s /usr/lib/libcrypto.so.3 /usr/lib/libcrypto.so.1.1
+
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=builder /app/dist ./dist
+
+# Копируем node_modules из корня (там лежит .prisma)
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
-RUN mkdir -p /storage
-VOLUME ["/storage"]
+COPY --from=builder /app/shared ./shared
+COPY --from=builder /app/services/fs-service ./services/fs-service
+
+WORKDIR /app/services/fs-service
 EXPOSE 3002
-CMD ["node", "dist/index.js"]
+CMD ["npx", "tsx", "src/index.ts"]

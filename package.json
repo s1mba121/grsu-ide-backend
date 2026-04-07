@@ -8,6 +8,7 @@
   "scripts": {
     "dev:auth": "npm run dev --workspace=services/auth-service",
     "dev:gateway": "npm run dev --workspace=services/gateway",
-    "build": "npm run build --workspaces"
+    "build": "npm run build --workspaces",
+    "prisma:generate:all": "npm run prisma:generate --workspace=services/auth-service && npm run prisma:generate --workspace=services/fs-service && npm run prisma:generate --workspace=services/task-service"
   }
 }

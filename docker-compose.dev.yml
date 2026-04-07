@@ -86,6 +86,27 @@ services:
     depends_on:
       - auth-service
 
+  runner-service:
+    build:
+      context: ./services/runner-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3004
+      REDIS_URL: redis://redis:6379
+      FS_SERVICE_URL: http://fs-service:3002
+      STORAGE_PATH: /storage
+      CODE_TIMEOUT_MS: 15000
+      MAX_CONCURRENT_RUNS: 5
+      NODE_ENV: development
+    ports:
+      - "3004:3004"
+    volumes:
+      - fs_storage:/storage
+      - /var/run/docker.sock:/var/run/docker.sock  # даём доступ к Docker хоста
+    depends_on:
+      - redis
+      - fs-service
+
 volumes:
   postgres_data:
   fs_storage:

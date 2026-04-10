@@ -10,11 +10,15 @@ export async function examsRoutes(app: FastifyInstance) {
         try {
             const user = getUser(req)
             const schema = z.object({
-                taskId: z.string().uuid(),
+                taskId: z.string().uuid().optional(),
+                folderId: z.string().uuid().optional(),
                 title: z.string().min(1).max(255),
                 openMode: z.enum(['manual', 'scheduled']).default('manual'),
                 startsAt: z.string().datetime().optional(),
                 endsAt: z.string().datetime().optional(),
+                groupId: z.string().uuid(),
+            }).refine(d => d.taskId || d.folderId, {
+                message: 'Укажите taskId или folderId',
             })
 
             const result = schema.safeParse(req.body)
@@ -41,6 +45,21 @@ export async function examsRoutes(app: FastifyInstance) {
         const user = getUser(req)
         const exams = await ExamRepository.findByTeacher(user.id)
         return reply.send({ ok: true, data: exams })
+    })
+
+    // GET /exams/my — экзамены группы студента
+    app.get('/my', async (req, reply) => {
+        try {
+            const user = getUser(req)
+            if (!user.groupId) {
+                return reply.status(400).send({ ok: false, error: 'Вы не состоите в группе' })
+            }
+
+            const exams = await ExamRepository.findByGroup(user.groupId)
+            return reply.send({ ok: true, data: exams })
+        } catch (err: any) {
+            return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
+        }
     })
 
     // GET /exams/:id — детали (teacher)
@@ -102,24 +121,18 @@ export async function examsRoutes(app: FastifyInstance) {
     })
 
     // GET /exams/join/:token — инфо об экзамене по инвайт-токену (публичный)
-    app.get('/join/:token', async (req, reply) => {
+    app.post('/join/:token', async (req, reply) => {
         try {
+            const user = getUser(req)
             const { token } = req.params as { token: string }
             const exam = await ExamRepository.findByToken(token)
             if (!exam) return reply.status(404).send({ ok: false, error: 'Экзамен не найден' })
+            if (exam.status === 'closed') {
+                return reply.status(403).send({ ok: false, error: 'Экзамен закрыт' })
+            }
 
-            return reply.send({
-                ok: true,
-                data: {
-                    id: exam.id,
-                    title: exam.title,
-                    status: exam.status,
-                    task: exam.task,
-                    openMode: exam.openMode,
-                    startsAt: exam.startsAt,
-                    endsAt: exam.endsAt,
-                },
-            })
+            await ExamRepository.addParticipant(exam.id, user.id, user.fullName, user.email)
+            return reply.send({ ok: true, data: { examId: exam.id, joined: true } })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
         }

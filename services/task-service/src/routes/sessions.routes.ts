@@ -88,7 +88,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
                 return reply.status(400).send({ ok: false, error: 'Сессия уже завершена' })
             }
 
-            const task = await TaskRepository.findById(session.exam.task.id)
+            const task = await TaskRepository.findById(session.taskId!)
             if (!task) return reply.status(404).send({ ok: false, error: 'Задание не найдено' })
 
             const entryFile = task.language === 'python' ? 'main.py' : 'index.js'

@@ -4,6 +4,7 @@ import { SessionRepository } from '../repositories/session.repository.js'
 import { TaskRepository } from '../repositories/task.repository.js'
 import { config } from '../config.js'
 import type { OpenMode } from '@prisma/client'
+import { prisma } from '../db.js'
 
 // Создать проект студента через fs-service
 async function createStudentProject(
@@ -47,15 +48,28 @@ async function freezeProject(userId: string, projectId: string) {
 
 export const ExamService = {
     async createExam(data: {
-        taskId: string
+        taskId?: string
+        folderId?: string
         title: string
         openMode: OpenMode
         startsAt?: Date
         endsAt?: Date
         createdBy: string
+        groupId: string
     }) {
-        const task = await TaskRepository.findById(data.taskId)
-        if (!task) throw { statusCode: 404, message: 'Задание не найдено' }
+        if (!data.taskId && !data.folderId) {
+            throw { statusCode: 400, message: 'Укажите задание или папку' }
+        }
+
+        if (data.taskId) {
+            const task = await TaskRepository.findById(data.taskId)
+            if (!task) throw { statusCode: 404, message: 'Задание не найдено' }
+        }
+
+        if (data.folderId) {
+            const count = await prisma.task.count({ where: { folderId: data.folderId } })
+            if (!count) throw { statusCode: 400, message: 'Папка пуста' }
+        }
 
         const inviteToken = nanoid(32)
         return ExamRepository.create({ ...data, inviteToken })
@@ -64,34 +78,35 @@ export const ExamService = {
     async startSession(examId: string, userId: string) {
         const exam = await ExamRepository.findById(examId)
         if (!exam) throw { statusCode: 404, message: 'Экзамен не найден' }
+        if (exam.status !== 'active') throw { statusCode: 403, message: 'Экзамен не активен' }
 
-        // Проверяем статус экзамена
-        if (exam.status !== 'active') {
-            throw { statusCode: 403, message: 'Экзамен не активен' }
-        }
-
-        // Проверяем что студент в списке участников
         const isParticipant = await ExamRepository.isParticipant(examId, userId)
-        if (!isParticipant) {
-            throw { statusCode: 403, message: 'Вы не зарегистрированы на этот экзамен' }
-        }
+        if (!isParticipant) throw { statusCode: 403, message: 'Вы не зарегистрированы на этот экзамен' }
 
-        // Проверяем что сессии ещё нет
         const existing = await SessionRepository.findByExamAndUser(examId, userId)
-        if (existing) {
-            // Возвращаем существующую сессию (переподключение)
-            return existing
+        if (existing) return existing
+
+        // Определяем задание для этого студента
+        let taskId: string
+        if (exam.taskId) {
+            taskId = exam.taskId
+        } else if (exam.folderId) {
+            const tasks = await prisma.task.findMany({
+                where: { folderId: exam.folderId },
+                select: { id: true },
+            })
+            if (!tasks.length) throw { statusCode: 400, message: 'Папка заданий пуста' }
+            taskId = tasks[Math.floor(Math.random() * tasks.length)].id
+        } else {
+            throw { statusCode: 400, message: 'У экзамена нет задания' }
         }
 
-        // Создаём проект через fs-service
-        const projectId = await createStudentProject(
-            userId,
-            exam.task.id,
-            exam.task.language,
-            exam.task.templateCode
-        )
+        const task = await TaskRepository.findById(taskId)
+        if (!task) throw { statusCode: 404, message: 'Задание не найдено' }
 
-        return SessionRepository.create(examId, userId, projectId)
+        const projectId = await createStudentProject(userId, task.id, task.language, task.templateCode)
+
+        return SessionRepository.create(examId, userId, projectId, taskId)
     },
 
     async warn(sessionId: string, userId: string, eventType: string, details?: object) {

@@ -36,10 +36,11 @@ app.addHook('onRequest', async (req, reply) => {
         await req.jwtVerify()
 
         // Добавляем заголовки для downstream сервисов
-        const payload = req.user as { sub: string; email: string; role: string }
+        const payload = req.user as { sub: string; email: string; role: string; fullName: string }
         req.headers['x-user-id'] = payload.sub
         req.headers['x-user-email'] = payload.email
         req.headers['x-user-role'] = payload.role
+        req.headers['x-user-fullname'] = payload.fullName
     } catch {
         return reply.status(401).send({ ok: false, error: 'Требуется авторизация' })
     }
@@ -80,6 +81,12 @@ await app.register(httpProxy, {
     upstream: config.RUNNER_SERVICE_URL,
     prefix: '/api/runner',
     rewritePrefix: '/runner',
+})
+
+await app.register(httpProxy, {
+    upstream: config.TASK_SERVICE_URL,
+    prefix: '/api/task-folders',
+    rewritePrefix: '/task-folders',
 })
 
 app.get('/health', async () => ({ status: 'ok', service: 'gateway' }))

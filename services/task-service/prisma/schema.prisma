@@ -18,8 +18,19 @@ model Task {
   createdAt      DateTime   @default(now()) @map("created_at")
   testCases      TestCase[]
   exams          Exam[]
+  folderId  String?
+  folder    TaskFolder? @relation("TaskFolderTasks", fields: [folderId], references: [id], onDelete: SetNull)
 
   @@map("tasks")
+}
+
+model TaskFolder {
+  id        String   @id @default(uuid())
+  name      String
+  createdBy String
+  createdAt DateTime @default(now())
+
+  tasks     Task[]   @relation("TaskFolderTasks")
 }
 
 model TestCase {
@@ -37,8 +48,9 @@ model TestCase {
 
 model Exam {
   id           String        @id @default(uuid())
-  taskId       String        @map("task_id")
-  task         Task          @relation(fields: [taskId], references: [id])
+  taskId       String?       @map("task_id")
+  folderId     String?
+  task         Task?         @relation(fields: [taskId], references: [id])
   title        String        @db.VarChar(255)
   inviteToken  String        @unique @db.VarChar(64) @map("invite_token")
   openMode     OpenMode      @default(manual) @map("open_mode")
@@ -49,16 +61,19 @@ model Exam {
   createdAt    DateTime      @default(now()) @map("created_at")
   participants ExamParticipant[]
   sessions     ExamSession[]
+  groupId   String
 
   @@map("exams")
 }
 
 model ExamParticipant {
-  id       String   @id @default(uuid())
-  examId   String   @map("exam_id")
-  exam     Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
-  userId   String   @map("user_id")
-  joinedAt DateTime @default(now()) @map("joined_at")
+  id        String   @id @default(uuid())
+  examId    String   @map("exam_id")
+  exam      Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  fullName  String   @default("") @map("full_name")
+  email     String   @default("")
+  joinedAt  DateTime @default(now()) @map("joined_at")
 
   @@unique([examId, userId])
   @@map("exam_participants")
@@ -76,6 +91,7 @@ model ExamSession {
   warningsCount  Int           @default(0) @map("warnings_count")
   antiCheatLogs  AntiCheatLog[]
   submission     Submission?
+  taskId         String?
 
   @@unique([examId, userId])
   @@map("exam_sessions")

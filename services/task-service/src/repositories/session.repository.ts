@@ -2,9 +2,9 @@ import { prisma } from '../db.js'
 import type { SessionStatus, AntiCheatEvent, SubmissionStatus } from '@prisma/client'
 
 export const SessionRepository = {
-    async create(examId: string, userId: string, projectId: string) {
+    async create(examId: string, userId: string, projectId: string, taskId: string) {
         return prisma.examSession.create({
-            data: { examId, userId, projectId },
+            data: { examId, userId, projectId, taskId },
         })
     },
 
@@ -18,7 +18,10 @@ export const SessionRepository = {
     async findById(id: string) {
         return prisma.examSession.findUnique({
             where: { id },
-            include: { exam: { include: { task: true } }, submission: true },
+            include: {
+                exam: true,           // убираем include task из exam
+                submission: true,
+            },
         })
     },
 

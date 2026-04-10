@@ -3,13 +3,15 @@ import type { OpenMode, ExamStatus } from '@prisma/client'
 
 export const ExamRepository = {
     async create(data: {
-        taskId: string
+        taskId?: string
+        folderId?: string
         title: string
         inviteToken: string
         openMode: OpenMode
         startsAt?: Date
         endsAt?: Date
         createdBy: string
+        groupId: string
     }) {
         return prisma.exam.create({
             data,
@@ -25,6 +27,18 @@ export const ExamRepository = {
                 participants: true,
                 sessions: true,
             },
+        })
+    },
+
+
+    async findByGroup(groupId: string) {
+        return prisma.exam.findMany({
+            where: { groupId },
+            include: {
+                task: { select: { title: true, description: true, language: true, timeLimitMin: true } },
+                _count: { select: { sessions: true } },
+            },
+            orderBy: { createdAt: 'desc' },
         })
     },
 
@@ -53,10 +67,10 @@ export const ExamRepository = {
         })
     },
 
-    async addParticipant(examId: string, userId: string) {
+    async addParticipant(examId: string, userId: string, fullName: string, email: string) {
         return prisma.examParticipant.upsert({
             where: { examId_userId: { examId, userId } },
-            create: { examId, userId },
+            create: { examId, userId, fullName, email },
             update: {},
         })
     },

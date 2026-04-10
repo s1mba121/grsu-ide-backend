@@ -121,18 +121,24 @@ export async function examsRoutes(app: FastifyInstance) {
     })
 
     // GET /exams/join/:token — инфо об экзамене по инвайт-токену (публичный)
-    app.post('/join/:token', async (req, reply) => {
+    app.get('/join/:token', async (req, reply) => {
         try {
-            const user = getUser(req)
             const { token } = req.params as { token: string }
             const exam = await ExamRepository.findByToken(token)
             if (!exam) return reply.status(404).send({ ok: false, error: 'Экзамен не найден' })
-            if (exam.status === 'closed') {
-                return reply.status(403).send({ ok: false, error: 'Экзамен закрыт' })
-            }
 
-            await ExamRepository.addParticipant(exam.id, user.id, user.fullName, user.email)
-            return reply.send({ ok: true, data: { examId: exam.id, joined: true } })
+            return reply.send({
+                ok: true,
+                data: {
+                    id: exam.id,
+                    title: exam.title,
+                    status: exam.status,
+                    task: exam.task,
+                    openMode: exam.openMode,
+                    startsAt: exam.startsAt,
+                    endsAt: exam.endsAt,
+                },
+            })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
         }
@@ -149,7 +155,7 @@ export async function examsRoutes(app: FastifyInstance) {
                 return reply.status(403).send({ ok: false, error: 'Экзамен закрыт' })
             }
 
-            await ExamRepository.addParticipant(exam.id, user.id)
+            await ExamRepository.addParticipant(exam.id, user.id, user.fullName, user.email)
             return reply.send({ ok: true, data: { examId: exam.id, joined: true } })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })

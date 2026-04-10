@@ -21,7 +21,8 @@ export async function groupsRoutes(app: FastifyInstance) {
     })
 
     // GET /groups — teacher, admin
-    app.get('/groups', { preHandler: requireAuth(['admin', 'teacher']) }, async (_req, reply) => {
+    // , { preHandler: requireAuth(['admin', 'teacher']) }
+    app.get('/groups', async (_req, reply) => {
         const groups = await GroupRepository.findAll()
         return reply.send({ ok: true, data: groups })
     })

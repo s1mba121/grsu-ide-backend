@@ -23,7 +23,7 @@ services:
       dockerfile: services/auth-service/Dockerfile
     environment:
       PORT: 3001
-      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
+      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_auth
       JWT_ACCESS_SECRET: dev_access_secret_change_in_prod
       JWT_REFRESH_SECRET: dev_refresh_secret_change_in_prod
       NODE_ENV: development
@@ -43,7 +43,7 @@ services:
       dockerfile: services/fs-service/Dockerfile
     environment:
       PORT: 3002
-      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
+      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_fs
       STORAGE_PATH: /storage
       NODE_ENV: development
     ports:
@@ -59,7 +59,7 @@ services:
       dockerfile: services/task-service/Dockerfile
     environment:
       PORT: 3003
-      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide
+      DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_tasks
       FS_SERVICE_URL: http://fs-service:3002
       RUNNER_SERVICE_URL: http://runner-service:3004
       NODE_ENV: development

@@ -17,6 +17,7 @@ await app.register(fastifyJwt, { secret: config.JWT_ACCESS_SECRET })
 
 // Публичные маршруты — без JWT (auth сам разберётся)
 const PUBLIC_PATHS = [
+    '/api/auth/groups', // список групп может быть публичным
     '/api/auth/register',
     '/api/auth/login',
     '/api/auth/refresh',

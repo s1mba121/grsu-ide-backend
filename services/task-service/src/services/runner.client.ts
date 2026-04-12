@@ -24,13 +24,23 @@ export async function runTests(
     entryFile: string,
     testCases: { input: string; expectedOutput: string }[]
 ): Promise<TestResult[]> {
-    const res = await fetch(`${config.RUNNER_SERVICE_URL}/runner/test`, {
+    const url = `${config.RUNNER_SERVICE_URL}/runner/test`
+    console.log('[runner.client] runTests →', url, { projectId, userId, language, entryFile, testCases: testCases.length })
+
+    const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ projectId, language, entryFile, testCases }),
+        body: JSON.stringify({ projectId, userId, language, entryFile, testCases }),
     })
 
-    if (!res.ok) throw { statusCode: 502, message: 'Runner недоступен' }
+    console.log('[runner.client] runTests ← status:', res.status)
+
+    if (!res.ok) {
+        const text = await res.text()
+        console.error('[runner.client] runTests error body:', text)
+        throw { statusCode: 502, message: 'Runner недоступен' }
+    }
+
     const data = await res.json() as { data: TestResult[] }
     return data.data
 }

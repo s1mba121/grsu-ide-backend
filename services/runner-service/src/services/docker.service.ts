@@ -55,6 +55,7 @@ export async function runInDocker(opts: RunOptions): Promise<RunResult> {
     const dockerArgs = [
         'run',
         '--rm',
+        '-i',
         '--network=none',
         '--memory=128m',
         '--memory-swap=128m',

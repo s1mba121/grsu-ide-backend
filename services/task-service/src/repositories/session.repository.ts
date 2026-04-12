@@ -11,7 +11,10 @@ export const SessionRepository = {
     async findByExamAndUser(examId: string, userId: string) {
         return prisma.examSession.findUnique({
             where: { examId_userId: { examId, userId } },
-            include: { submission: true },
+            include: {
+                submission: true,
+                task: { select: { timeLimitMin: true } },  // ← добавить
+            },
         })
     },
 

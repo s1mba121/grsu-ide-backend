@@ -20,6 +20,7 @@ model Task {
   exams          Exam[]
   folderId  String?
   folder    TaskFolder? @relation("TaskFolderTasks", fields: [folderId], references: [id], onDelete: SetNull)
+  sessions       ExamSession[]
 
   @@map("tasks")
 }
@@ -92,6 +93,7 @@ model ExamSession {
   antiCheatLogs  AntiCheatLog[]
   submission     Submission?
   taskId         String?
+  task           Task?         @relation(fields: [taskId], references: [id])
 
   @@unique([examId, userId])
   @@map("exam_sessions")

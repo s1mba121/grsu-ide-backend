@@ -51,12 +51,27 @@ export async function examsRoutes(app: FastifyInstance) {
     app.get('/my', async (req, reply) => {
         try {
             const user = getUser(req)
+            console.log('[GET /my] user:', user)  // ← добавить
             if (!user.groupId) {
                 return reply.status(400).send({ ok: false, error: 'Вы не состоите в группе' })
             }
-
             const exams = await ExamRepository.findByGroup(user.groupId)
             return reply.send({ ok: true, data: exams })
+        } catch (err: any) {
+            return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
+        }
+    })
+
+    app.get('/my/:id', async (req, reply) => {
+        try {
+            const user = getUser(req)
+            const { id } = req.params as { id: string }
+            const exam = await ExamRepository.findById(id)
+            if (!exam) return reply.status(404).send({ ok: false, error: 'Не найдено' })
+            if (exam.groupId !== user.groupId) {
+                return reply.status(403).send({ ok: false, error: 'Нет доступа' })
+            }
+            return reply.send({ ok: true, data: exam })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
         }
@@ -78,7 +93,7 @@ export async function examsRoutes(app: FastifyInstance) {
     app.patch('/:id/open', { preHandler: requireRole(['teacher', 'admin']) }, async (req, reply) => {
         try {
             const { id } = req.params as { id: string }
-            const exam = await ExamRepository.updateStatus(id, 'active')
+            const exam = await ExamService.openExam(id)  // ← через сервис
             return reply.send({ ok: true, data: exam })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })

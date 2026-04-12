@@ -6,15 +6,13 @@ import type { FastifyInstance } from 'fastify'
 
 export function createAuthService(app: FastifyInstance) {
     return {
-        async register(email: string, fullName: string, password: string) {
+        async register(email: string, fullName: string, password: string, groupId?: string) {
             const existing = await UserRepository.findByEmail(email)
             if (existing) {
                 throw { statusCode: 409, message: 'Email уже зарегистрирован' }
             }
-
             const passwordHash = await bcrypt.hash(password, config.BCRYPT_ROUNDS)
-            const user = await UserRepository.create({ email, fullName, passwordHash })
-
+            const user = await UserRepository.create({ email, fullName, passwordHash, groupId })  // ← добавить
             return this.generateTokens(user)
         },
 
@@ -68,8 +66,8 @@ export function createAuthService(app: FastifyInstance) {
             await TokenRepository.findAndDelete(refreshToken)
         },
 
-        async generateTokens(user: { id: string; email: string; role: string }) {
-            const payload = { sub: user.id, email: user.email, role: user.role }
+        async generateTokens(user: { id: string; email: string; role: string; groupId?: string | null }) {
+            const payload = { sub: user.id, email: user.email, role: user.role, groupId: user.groupId ?? null }
 
             const accessToken = app.jwt.sign(payload, {
                 expiresIn: config.JWT_ACCESS_EXPIRES,

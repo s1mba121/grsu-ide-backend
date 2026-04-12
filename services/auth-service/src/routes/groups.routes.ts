@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { GroupRepository } from '../repositories/group.repository.js'
 import { requireAuth } from '../middlewares/auth.middleware.js'
+import { config } from '../config.js'
 
 export async function groupsRoutes(app: FastifyInstance) {
     // POST /groups — admin
@@ -62,5 +63,23 @@ export async function groupsRoutes(app: FastifyInstance) {
         } catch {
             return reply.status(404).send({ ok: false, error: 'Пользователь не найден' })
         }
+    })
+
+    // GET /internal/groups/:id/members — только для межсервисных запросов
+    app.get('/internal/groups/:id/members', async (req, reply) => {
+        const serviceKey = req.headers['x-service-key']
+        if (serviceKey !== config.SERVICE_KEY) {  // ← config вместо process.env
+            return reply.status(403).send({ ok: false, error: 'Forbidden' })
+        }
+
+        const { id } = req.params as { id: string }
+        const group = await GroupRepository.findById(id)
+        if (!group) return reply.status(404).send({ ok: false, error: 'Группа не найдена' })
+
+        const students = group.users
+            .filter(u => u.role === 'student')
+            .map(({ passwordHash, ...u }) => u)
+
+        return reply.send({ ok: true, data: students })
     })
 }

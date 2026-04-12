@@ -33,6 +33,39 @@ async function createStudentProject(
     return data.data.id
 }
 
+async function writeReadme(userId: string, projectId: string, task: {
+    title: string
+    description: string
+    language: string
+    timeLimitMin: number
+}) {
+    const entryFile = task.language === 'python' ? 'main.py' : 'index.js'
+    const content = [
+        `# ${task.title}`,
+        ``,
+        `## Описание`,
+        ``,
+        task.description,
+        ``,
+        `## Инструкция`,
+        ``,
+        `- Напишите решение в файле \`${entryFile}\``,
+        `- Время выполнения: **${task.timeLimitMin} минут**`,
+        `- Используйте кнопку **«Запустить тесты»** для проверки`,
+        `- Когда будете готовы — нажмите **«Сдать работу»**`,
+    ].join('\n')
+
+    await fetch(`${config.FS_SERVICE_URL}/fs/${projectId}/file`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': userId,
+            'x-user-role': 'student',
+        },
+        body: JSON.stringify({ path: 'README.md', content }),
+    })
+}
+
 // Заморозить проект (readonly) после сдачи
 async function freezeProject(userId: string, projectId: string) {
     await fetch(`${config.FS_SERVICE_URL}/fs/projects/${projectId}/readonly`, {
@@ -86,7 +119,6 @@ export const ExamService = {
         const existing = await SessionRepository.findByExamAndUser(examId, userId)
         if (existing) return existing
 
-        // Определяем задание для этого студента
         let taskId: string
         if (exam.taskId) {
             taskId = exam.taskId
@@ -105,6 +137,9 @@ export const ExamService = {
         if (!task) throw { statusCode: 404, message: 'Задание не найдено' }
 
         const projectId = await createStudentProject(userId, task.id, task.language, task.templateCode)
+
+        // Записываем README.md с описанием задания
+        await writeReadme(userId, projectId, task)
 
         return SessionRepository.create(examId, userId, projectId, taskId)
     },
@@ -154,5 +189,31 @@ export const ExamService = {
         await freezeProject(userId, session.projectId)
 
         return { submitted: true, sessionId: session.id }
+    },
+
+    // exam.service.ts
+    async openExam(examId: string) {
+        const exam = await ExamRepository.findById(examId)
+        if (!exam) throw { statusCode: 404, message: 'Экзамен не найден' }
+
+        const url = `${config.AUTH_SERVICE_URL}/auth/internal/groups/${exam.groupId}/members`
+        const res = await fetch(url, {
+            headers: { 'x-service-key': config.SERVICE_KEY ?? '' },
+        })
+
+        console.log('[openExam] fetch', url, 'status:', res.status)
+
+        if (res.ok) {
+            const data = await res.json() as { data: { id: string; fullName: string; email: string }[] }
+            console.log('[openExam] students:', data.data)
+            if (data.data?.length) {
+                await ExamRepository.addParticipantsBulk(examId, data.data)
+            }
+        } else {
+            const text = await res.text()
+            console.error('[openExam] auth-service error:', res.status, text)
+        }
+
+        return ExamRepository.updateStatus(examId, 'active')
     },
 }

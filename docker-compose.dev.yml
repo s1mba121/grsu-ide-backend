@@ -26,6 +26,7 @@ services:
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_auth
       JWT_ACCESS_SECRET: dev_access_secret_change_in_prod
       JWT_REFRESH_SECRET: dev_refresh_secret_change_in_prod
+      SERVICE_KEY: task-service-secret
       NODE_ENV: development
     ports:
       - "3001:3001"
@@ -62,6 +63,9 @@ services:
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_tasks
       FS_SERVICE_URL: http://fs-service:3002
       RUNNER_SERVICE_URL: http://runner-service:3004
+      UTH_SERVICE_URL: http://auth-service:3001
+      AUTH_SERVICE_URL: http://auth-service:3001
+      SERVICE_KEY: task-service-secret
       NODE_ENV: development
     ports:
       - "3003:3003"

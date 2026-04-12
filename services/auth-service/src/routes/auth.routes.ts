@@ -7,6 +7,7 @@ const registerSchema = z.object({
     email: z.string().email('Некорректный email'),
     fullName: z.string().min(2, 'Минимум 2 символа').max(100),
     password: z.string().min(8, 'Минимум 8 символов'),
+    groupId: z.string().uuid().optional(),  // ← добавить
 })
 
 const loginSchema = z.object({
@@ -35,7 +36,8 @@ export async function authRoutes(app: FastifyInstance) {
             const tokens = await authService.register(
                 result.data.email,
                 result.data.fullName,
-                result.data.password
+                result.data.password,
+                result.data.groupId,  // ← добавить
             )
             return reply.status(201).send({ ok: true, data: tokens })
         } catch (err: any) {

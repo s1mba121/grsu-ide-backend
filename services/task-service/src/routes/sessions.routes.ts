@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { SessionRepository } from '../repositories/session.repository.js'
 import { ExamService } from '../services/exam.service.js'
 import { TaskRepository } from '../repositories/task.repository.js'
-import { runTests } from '../services/runner.client.js'
+import { runTests, runCode } from '../services/runner.client.js'
 import { getUser } from '../middlewares/auth.middleware.js'
 
 export async function sessionsRoutes(app: FastifyInstance) {
@@ -84,7 +84,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
 
             const session = await SessionRepository.findByExamAndUser(examId, user.id)
             if (!session) return reply.status(404).send({ ok: false, error: 'Сессия не найдена' })
-            if (session.status === 'in_progress' === false) {
+            if (session.status !== 'in_progress') {
                 return reply.status(400).send({ ok: false, error: 'Сессия уже завершена' })
             }
 
@@ -96,6 +96,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
             // Запускаем тесты через runner-service
             const results = await runTests(
                 session.projectId,
+
                 task.language,
                 entryFile,
                 task.testCases.map(tc => ({
@@ -157,6 +158,30 @@ export async function sessionsRoutes(app: FastifyInstance) {
             }
 
             return reply.send({ ok: true, data: session.submission })
+        } catch (err: any) {
+            return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
+        }
+    })
+
+    // POST /sessions/:examId/run-code — запустить код без тестов
+    app.post('/:examId/run-code', async (req, reply) => {
+        try {
+            const user = getUser(req)
+            const { examId } = req.params as { examId: string }
+
+            const session = await SessionRepository.findByExamAndUser(examId, user.id)
+            if (!session) return reply.status(404).send({ ok: false, error: 'Сессия не найдена' })
+            if (session.status !== 'in_progress') {
+                return reply.status(400).send({ ok: false, error: 'Сессия уже завершена' })
+            }
+
+            const task = await TaskRepository.findById(session.taskId!)
+            if (!task) return reply.status(404).send({ ok: false, error: 'Задание не найдено' })
+
+            const entryFile = task.language === 'python' ? 'main.py' : 'index.js'
+            const result = await runCode(session.projectId, task.language, entryFile)
+
+            return reply.send({ ok: true, data: result })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
         }

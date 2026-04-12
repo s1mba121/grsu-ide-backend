@@ -8,6 +8,7 @@ const schema = z.object({
     JWT_ACCESS_EXPIRES: z.string().default('15m'),
     JWT_REFRESH_EXPIRES: z.string().default('7d'),
     BCRYPT_ROUNDS: z.coerce.number().default(12),
+    SERVICE_KEY: z.string().default('task-service-secret'),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 })
 

@@ -81,4 +81,17 @@ export const ExamRepository = {
         })
         return !!p
     },
+
+    // exam.repository.ts
+    async addParticipantsBulk(examId: string, users: { id: string; fullName: string; email: string }[]) {
+        return prisma.examParticipant.createMany({
+            data: users.map(u => ({
+                examId,
+                userId: u.id,
+                fullName: u.fullName,
+                email: u.email,
+            })),
+            skipDuplicates: true,
+        })
+    },
 }

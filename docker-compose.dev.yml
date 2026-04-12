@@ -99,6 +99,7 @@ services:
       REDIS_URL: redis://redis:6379
       FS_SERVICE_URL: http://fs-service:3002
       STORAGE_PATH: /storage
+      HOST_STORAGE_PATH: /var/lib/docker/volumes/grsu-ide-backend_fs_storage/_data
       CODE_TIMEOUT_MS: 15000
       MAX_CONCURRENT_RUNS: 5
       NODE_ENV: development

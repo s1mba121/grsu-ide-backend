@@ -96,6 +96,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
             // Запускаем тесты через runner-service
             const results = await runTests(
                 session.projectId,
+                user.id,
 
                 task.language,
                 entryFile,
@@ -179,7 +180,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
             if (!task) return reply.status(404).send({ ok: false, error: 'Задание не найдено' })
 
             const entryFile = task.language === 'python' ? 'main.py' : 'index.js'
-            const result = await runCode(session.projectId, task.language, entryFile)
+            const result = await runCode(session.projectId, task.language, entryFile, user.id)
 
             return reply.send({ ok: true, data: result })
         } catch (err: any) {

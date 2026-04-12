@@ -43,93 +43,80 @@ export async function runInDocker(opts: RunOptions): Promise<RunResult> {
         timeoutMs = config.CODE_TIMEOUT_MS,
     } = opts
 
-    const runId = randomUUID()
-    const tmpDir = `/tmp/grsu-run-${runId}`
+    // Путь к файлам проекта — монтируем напрямую, без копирования
     const srcDir = join(config.STORAGE_PATH, 'users', userId, 'projects', projectId)
+    const hostSrcDir = join(config.HOST_STORAGE_PATH, 'users', userId, 'projects', projectId)
 
     const startedAt = Date.now()
 
-    try {
-        // Копируем файлы проекта во временную директорию
-        await mkdir(tmpDir, { recursive: true })
-        await cp(srcDir, tmpDir, { recursive: true })
+    const image = IMAGES[language]
+    const cmd = COMMANDS[language](entryFile)
 
-        const image = IMAGES[language]
-        const cmd = COMMANDS[language](entryFile)
+    const dockerArgs = [
+        'run',
+        '--rm',
+        '--network=none',
+        '--memory=128m',
+        '--memory-swap=128m',
+        '--cpus=0.5',
+        '--pids-limit=50',
+        '--read-only',
+        '--tmpfs=/tmp:size=10m',
+        `-v`, `${hostSrcDir}:/app:ro`,  // ← hostSrcDir вместо tmpDir
+        '--user=nobody',
+        image,
+        ...cmd,
+    ]
 
-        const dockerArgs = [
-            'run',
-            '--rm',                          // удалить контейнер после завершения
-            '--network=none',                // нет доступа к сети
-            `--memory=128m`,                 // лимит памяти
-            `--memory-swap=128m`,            // swap тоже ограничиваем
-            `--cpus=0.5`,                    // лимит CPU
-            `--pids-limit=50`,               // нельзя форкать без конца
-            `--read-only`,                   // read-only файловая система
-            `--tmpfs=/tmp:size=10m`,         // только /tmp доступен для записи
-            `-v`, `${tmpDir}:/app:ro`,       // файлы студента только на чтение
-            `--user=nobody`,                 // непривилегированный пользователь
-            image,
-            ...cmd,
-        ]
+    return await new Promise<RunResult>((resolve) => {
+        let stdout = ''
+        let stderr = ''
+        let timedOut = false
 
-        return await new Promise<RunResult>((resolve) => {
-            let stdout = ''
-            let stderr = ''
-            let timedOut = false
+        const proc = spawn('docker', dockerArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
 
-            const proc = spawn('docker', dockerArgs, { stdio: ['pipe', 'pipe', 'pipe'] })
+        const timer = setTimeout(() => {
+            timedOut = true
+            proc.kill('SIGKILL')
+        }, timeoutMs)
 
-            // Таймер — убиваем контейнер если превысил лимит
-            const timer = setTimeout(() => {
-                timedOut = true
-                proc.kill('SIGKILL')
-            }, timeoutMs)
+        if (stdin) {
+            proc.stdin.write(stdin)
+        }
+        proc.stdin.end()
 
-            // Пишем stdin если есть
-            if (stdin) {
-                proc.stdin.write(stdin)
-            }
-            proc.stdin.end()
+        proc.stdout.on('data', (chunk: Buffer) => {
+            stdout += chunk.toString()
+            if (stdout.length > 1024 * 512) proc.kill('SIGKILL')
+        })
 
-            proc.stdout.on('data', (chunk: Buffer) => {
-                stdout += chunk.toString()
-                // Защита от бесконечного вывода
-                if (stdout.length > 1024 * 512) proc.kill('SIGKILL')
-            })
+        proc.stderr.on('data', (chunk: Buffer) => {
+            stderr += chunk.toString()
+        })
 
-            proc.stderr.on('data', (chunk: Buffer) => {
-                stderr += chunk.toString()
-            })
-
-            proc.on('close', (exitCode) => {
-                clearTimeout(timer)
-                const durationMs = Date.now() - startedAt
-
-                resolve({
-                    stdout: stdout.trim(),
-                    stderr: stderr.trim(),
-                    exitCode: exitCode ?? 1,
-                    durationMs,
-                    timedOut,
-                })
-            })
-
-            proc.on('error', (err) => {
-                clearTimeout(timer)
-                resolve({
-                    stdout: '',
-                    stderr: `Ошибка запуска: ${err.message}`,
-                    exitCode: 1,
-                    durationMs: Date.now() - startedAt,
-                    timedOut: false,
-                })
+        proc.on('close', (exitCode) => {
+            clearTimeout(timer)
+            const durationMs = Date.now() - startedAt
+            resolve({
+                stdout: stdout.trim(),
+                stderr: stderr.trim(),
+                exitCode: exitCode ?? 1,
+                durationMs,
+                timedOut,
             })
         })
-    } finally {
-        // Всегда чистим временную директорию
-        await rm(tmpDir, { recursive: true, force: true })
-    }
+
+        proc.on('error', (err) => {
+            clearTimeout(timer)
+            resolve({
+                stdout: '',
+                stderr: `Ошибка запуска: ${err.message}`,
+                exitCode: 1,
+                durationMs: Date.now() - startedAt,
+                timedOut: false,
+            })
+        })
+    })
 }
 
 // Нормализация вывода для сравнения с expected_output

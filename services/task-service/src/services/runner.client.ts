@@ -19,6 +19,7 @@ export interface RunResult {
 
 export async function runTests(
     projectId: string,
+    userId: string,
     language: string,
     entryFile: string,
     testCases: { input: string; expectedOutput: string }[]
@@ -37,14 +38,30 @@ export async function runTests(
 export async function runCode(
     projectId: string,
     language: string,
-    entryFile: string
+    entryFile: string,
+    userId: string
 ): Promise<RunResult> {
-    const res = await fetch(`${config.RUNNER_SERVICE_URL}/runner/run`, {
+    const url = `${config.RUNNER_SERVICE_URL}/runner/run`
+    console.log('[runner.client] runCode →', url, { projectId, language, entryFile, userId })
+
+    const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            'x-user-id': userId,
+            'x-user-role': 'student',
+        },
         body: JSON.stringify({ projectId, language, entryFile }),
     })
-    if (!res.ok) throw { statusCode: 502, message: 'Runner недоступен' }
+
+    console.log('[runner.client] runCode ← status:', res.status)
+
+    if (!res.ok) {
+        const text = await res.text()
+        console.error('[runner.client] runCode error body:', text)
+        throw { statusCode: 502, message: 'Runner недоступен' }
+    }
+
     const data = await res.json() as { data: RunResult }
     return data.data
 }

@@ -72,13 +72,27 @@ export const SessionRepository = {
     },
 
     async findAllByExam(examId: string) {
-        return prisma.examSession.findMany({
-            where: { examId },
-            include: {
-                submission: true,
-                antiCheatLogs: { orderBy: { occurredAt: 'asc' } },
-            },
-            orderBy: { startedAt: 'asc' },
-        })
+        const [sessions, participants] = await Promise.all([
+            prisma.examSession.findMany({
+                where: { examId },
+                include: {
+                    submission: true,
+                    antiCheatLogs: { orderBy: { occurredAt: 'asc' } },
+                },
+                orderBy: { startedAt: 'asc' },
+            }),
+            prisma.examParticipant.findMany({
+                where: { examId },
+                select: { userId: true, fullName: true, email: true },
+            }),
+        ])
+
+        const participantMap = new Map(participants.map(p => [p.userId, p]))
+
+        return sessions.map(s => ({
+            ...s,
+            fullName: participantMap.get(s.userId)?.fullName ?? s.userId,
+            email: participantMap.get(s.userId)?.email ?? '',
+        }))
     },
 }

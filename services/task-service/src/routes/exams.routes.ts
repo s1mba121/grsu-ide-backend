@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
 import { ExamRepository } from '../repositories/exam.repository.js'
+import { SessionRepository } from '../repositories/session.repository.js'
 import { ExamService } from '../services/exam.service.js'
 import { getUser, requireRole } from '../middlewares/auth.middleware.js'
 
@@ -175,5 +176,46 @@ export async function examsRoutes(app: FastifyInstance) {
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
         }
+    })
+
+    // GET /exams/:id/events — SSE стрим для преподавателя
+    app.get('/:id/events', { preHandler: requireRole(['teacher', 'admin']) }, async (req, reply) => {
+        const { id } = req.params as { id: string }
+
+        reply.raw.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',  // отключаем буферизацию nginx
+        })
+
+        // Отправляем начальное состояние
+        const sessions = await SessionRepository.findAllByExam(id)
+        reply.raw.write(`data: ${JSON.stringify({ type: 'snapshot', sessions })}\n\n`)
+
+        // Пингуем каждые 15 сек чтобы не закрылось соединение
+        const ping = setInterval(() => {
+            reply.raw.write(`data: ${JSON.stringify({ type: 'ping' })}\n\n`)
+        }, 15000)
+
+        // Поллинг БД каждые 3 секунды — ищем изменения
+        let lastSnapshot = JSON.stringify(sessions.map(s => ({ id: s.id, status: s.status, warningsCount: s.warningsCount })))
+
+        const poll = setInterval(async () => {
+            try {
+                const current = await SessionRepository.findAllByExam(id)
+                const currentSnapshot = JSON.stringify(current.map(s => ({ id: s.id, status: s.status, warningsCount: s.warningsCount })))
+
+                if (currentSnapshot !== lastSnapshot) {
+                    lastSnapshot = currentSnapshot
+                    reply.raw.write(`data: ${JSON.stringify({ type: 'update', sessions: current })}\n\n`)
+                }
+            } catch { }
+        }, 3000)
+
+        req.raw.on('close', () => {
+            clearInterval(ping)
+            clearInterval(poll)
+        })
     })
 }

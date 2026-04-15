@@ -28,15 +28,22 @@ const PUBLIC_PATHS = [
 app.addHook('onRequest', async (req, reply) => {
     const isPublic = PUBLIC_PATHS.some(p => req.url.startsWith(p))
     if (isPublic) return
-
-    // /health не трогаем
     if (req.url === '/health') return
 
-    try {
-        await req.jwtVerify()
+    // SSE — токен в query параметре
+    const url = new URL(req.url, 'http://localhost')
+    const queryToken = url.searchParams.get('token')
+    const authHeader = req.headers['authorization']
+    const rawToken = queryToken ?? authHeader?.replace('Bearer ', '')
 
-        // Добавляем заголовки для downstream сервисов
-        const payload = req.user as { sub: string; email: string; role: string; fullName: string; groupId?: string }
+    if (!rawToken) {
+        return reply.status(401).send({ ok: false, error: 'Требуется авторизация' })
+    }
+
+    try {
+        const payload = app.jwt.verify(rawToken) as {
+            sub: string; email: string; role: string; fullName: string; groupId?: string
+        }
         req.headers['x-user-id'] = payload.sub
         req.headers['x-user-email'] = payload.email
         req.headers['x-user-role'] = payload.role
@@ -70,6 +77,31 @@ await app.register(httpProxy, {
     upstream: config.TASK_SERVICE_URL,
     prefix: '/api/exams',
     rewritePrefix: '/exams',
+    replyOptions: {
+        rewriteRequestHeaders: (req, headers) => headers,
+        onResponse: (request, reply, res) => {
+            const headers = res.headers || {}
+            const contentType = headers['content-type'] || headers['Content-Type'] || ''
+
+            if (contentType.includes('text/event-stream')) {
+                reply.raw.writeHead(200, {
+                    'Content-Type': 'text/event-stream',
+                    'Cache-Control': 'no-cache',
+                    'Connection': 'keep-alive',
+                    'X-Accel-Buffering': 'no',
+                })
+
+                res.on('error', (err) => {
+                    request.log.error('SSE stream error:', err)
+                    reply.raw.end()
+                })
+
+                res.pipe(reply.raw)
+            } else {
+                reply.send(res)
+            }
+        },
+    },
 })
 
 await app.register(httpProxy, {

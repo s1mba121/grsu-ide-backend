@@ -7,6 +7,8 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+**/.env
+
 node_modules
 dist
 dist-ssr
@@ -24,3 +26,10 @@ dist-ssr
 *.sw?
 plan.txt
 package-lock.json
+auth.dump
+backups.tar.gz
+tasks.dump
+fs.dump
+
+
+services/auth-service/.env

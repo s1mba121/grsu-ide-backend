@@ -48,6 +48,7 @@ Gateway :4000  ──── JWT verification
 **Стек:** Node.js, TypeScript, Fastify, Prisma ORM, PostgreSQL, Redis, Docker, BullMQ.
 
 **Монорепо структура (npm workspaces):**
+
 ```
 grsu-ide-backend/
 ├── services/
@@ -105,69 +106,69 @@ npm run build
 
 ### Корневые (`.env`)
 
-| Переменная | Описание | Пример |
-|---|---|---|
-| `POSTGRES_USER` | Пользователь PostgreSQL | `grsu` |
-| `POSTGRES_PASSWORD` | Пароль PostgreSQL | `change_me` |
-| `POSTGRES_DB` | Имя базы данных | `grsu_ide` |
-| `JWT_ACCESS_SECRET` | Секрет access-токена | `change_me_access` |
-| `JWT_REFRESH_SECRET` | Секрет refresh-токена | `change_me_refresh` |
-| `JWT_ACCESS_EXPIRES` | Время жизни access-токена | `15m` |
-| `JWT_REFRESH_EXPIRES` | Время жизни refresh-токена | `7d` |
-| `BCRYPT_ROUNDS` | Раундов хэширования bcrypt | `12` |
+| Переменная            | Описание                   | Пример              |
+| --------------------- | -------------------------- | ------------------- |
+| `POSTGRES_USER`       | Пользователь PostgreSQL    | `grsu`              |
+| `POSTGRES_PASSWORD`   | Пароль PostgreSQL          | `change_me`         |
+| `POSTGRES_DB`         | Имя базы данных            | `grsu_ide`          |
+| `JWT_ACCESS_SECRET`   | Секрет access-токена       | `change_me_access`  |
+| `JWT_REFRESH_SECRET`  | Секрет refresh-токена      | `change_me_refresh` |
+| `JWT_ACCESS_EXPIRES`  | Время жизни access-токена  | `15m`               |
+| `JWT_REFRESH_EXPIRES` | Время жизни refresh-токена | `7d`                |
+| `BCRYPT_ROUNDS`       | Раундов хэширования bcrypt | `12`                |
 
 ### Per-service
 
 #### Auth Service
 
-| Переменная | Описание |
-|---|---|
-| `PORT` | Порт сервиса (по умолчанию `3001`) |
-| `DATABASE_URL` | PostgreSQL DSN |
-| `JWT_ACCESS_SECRET` | Секрет для подписи access JWT |
-| `JWT_REFRESH_SECRET` | Секрет для подписи refresh JWT |
-| `JWT_ACCESS_EXPIRES` | Время жизни access-токена |
-| `JWT_REFRESH_EXPIRES` | Время жизни refresh-токена |
-| `BCRYPT_ROUNDS` | Раунды bcrypt |
+| Переменная            | Описание                           |
+| --------------------- | ---------------------------------- |
+| `PORT`                | Порт сервиса (по умолчанию `3001`) |
+| `DATABASE_URL`        | PostgreSQL DSN                     |
+| `JWT_ACCESS_SECRET`   | Секрет для подписи access JWT      |
+| `JWT_REFRESH_SECRET`  | Секрет для подписи refresh JWT     |
+| `JWT_ACCESS_EXPIRES`  | Время жизни access-токена          |
+| `JWT_REFRESH_EXPIRES` | Время жизни refresh-токена         |
+| `BCRYPT_ROUNDS`       | Раунды bcrypt                      |
 
 #### FS Service
 
-| Переменная | Описание |
-|---|---|
-| `PORT` | Порт сервиса (по умолчанию `3002`) |
-| `DATABASE_URL` | PostgreSQL DSN |
+| Переменная     | Описание                               |
+| -------------- | -------------------------------------- |
+| `PORT`         | Порт сервиса (по умолчанию `3002`)     |
+| `DATABASE_URL` | PostgreSQL DSN                         |
 | `STORAGE_PATH` | Путь к корневой папке хранилища файлов |
 
 #### Task Service
 
-| Переменная | Описание |
-|---|---|
-| `PORT` | Порт сервиса (по умолчанию `3003`) |
-| `DATABASE_URL` | PostgreSQL DSN |
-| `FS_SERVICE_URL` | URL fs-service |
-| `RUNNER_SERVICE_URL` | URL runner-service |
+| Переменная           | Описание                           |
+| -------------------- | ---------------------------------- |
+| `PORT`               | Порт сервиса (по умолчанию `3003`) |
+| `DATABASE_URL`       | PostgreSQL DSN                     |
+| `FS_SERVICE_URL`     | URL fs-service                     |
+| `RUNNER_SERVICE_URL` | URL runner-service                 |
 
 #### Runner Service
 
-| Переменная | Описание |
-|---|---|
-| `PORT` | Порт сервиса (по умолчанию `3004`) |
-| `REDIS_URL` | Redis DSN |
-| `FS_SERVICE_URL` | URL fs-service |
-| `STORAGE_PATH` | Путь к хранилищу (должен совпадать с fs-service) |
-| `CODE_TIMEOUT_MS` | Таймаут выполнения кода в мс (по умолчанию `15000`) |
+| Переменная            | Описание                                             |
+| --------------------- | ---------------------------------------------------- |
+| `PORT`                | Порт сервиса (по умолчанию `3004`)                   |
+| `REDIS_URL`           | Redis DSN                                            |
+| `FS_SERVICE_URL`      | URL fs-service                                       |
+| `STORAGE_PATH`        | Путь к хранилищу (должен совпадать с fs-service)     |
+| `CODE_TIMEOUT_MS`     | Таймаут выполнения кода в мс (по умолчанию `15000`)  |
 | `MAX_CONCURRENT_RUNS` | Максимум параллельных контейнеров (по умолчанию `5`) |
 
 #### Gateway
 
-| Переменная | Описание |
-|---|---|
-| `PORT` | Порт сервиса (по умолчанию `4000`) |
-| `JWT_ACCESS_SECRET` | Секрет для верификации JWT |
-| `AUTH_SERVICE_URL` | URL auth-service |
-| `FS_SERVICE_URL` | URL fs-service |
-| `TASK_SERVICE_URL` | URL task-service |
-| `RUNNER_SERVICE_URL` | URL runner-service |
+| Переменная           | Описание                           |
+| -------------------- | ---------------------------------- |
+| `PORT`               | Порт сервиса (по умолчанию `4000`) |
+| `JWT_ACCESS_SECRET`  | Секрет для верификации JWT         |
+| `AUTH_SERVICE_URL`   | URL auth-service                   |
+| `FS_SERVICE_URL`     | URL fs-service                     |
+| `TASK_SERVICE_URL`   | URL task-service                   |
+| `RUNNER_SERVICE_URL` | URL runner-service                 |
 
 ---
 
@@ -182,6 +183,7 @@ npm run build
 - **Проксирование** запросов по prefix-правилам.
 
 **Публичные маршруты** (не требуют JWT):
+
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
@@ -190,14 +192,14 @@ npm run build
 
 **Таблица маршрутизации:**
 
-| Prefix | Перенаправляется в | Rewrite |
-|---|---|---|
-| `/api/auth` | auth-service:3001 | `/auth` |
-| `/api/fs` | fs-service:3002 | `/fs` |
-| `/api/tasks` | task-service:3003 | `/tasks` |
-| `/api/exams` | task-service:3003 | `/exams` |
-| `/api/sessions` | task-service:3003 | `/sessions` |
-| `/api/runner` | runner-service:3004 | `/runner` |
+| Prefix          | Перенаправляется в  | Rewrite     |
+| --------------- | ------------------- | ----------- |
+| `/api/auth`     | auth-service:3001   | `/auth`     |
+| `/api/fs`       | fs-service:3002     | `/fs`       |
+| `/api/tasks`    | task-service:3003   | `/tasks`    |
+| `/api/exams`    | task-service:3003   | `/exams`    |
+| `/api/sessions` | task-service:3003   | `/sessions` |
+| `/api/runner`   | runner-service:3004 | `/runner`   |
 
 ---
 
@@ -206,11 +208,13 @@ npm run build
 Управляет аутентификацией, пользователями и группами.
 
 **Особенности:**
+
 - Пароли хэшируются через `bcryptjs`.
 - Refresh-токены хранятся в БД. При обновлении токен немедленно удаляется (token rotation). Повторное использование одного refresh-токена инвалидирует все токены пользователя.
 - Access-токен подписывается `JWT_ACCESS_SECRET`, refresh-токен — `JWT_REFRESH_SECRET`.
 
 **База данных — таблицы:**
+
 - `groups` — учебные группы
 - `users` — пользователи (роли: `student`, `teacher`, `admin`)
 - `refresh_tokens` — хранилище refresh-токенов
@@ -222,6 +226,7 @@ npm run build
 Управляет проектами и файлами на диске.
 
 **Структура хранилища на диске:**
+
 ```
 STORAGE_PATH/
 └── users/
@@ -233,12 +238,14 @@ STORAGE_PATH/
 ```
 
 **Особенности:**
+
 - Защита от path traversal: пути проверяются через `resolved.startsWith(root)`.
 - Флаг `isReadonly` на проекте: после сдачи студент не может изменять файлы.
 - При создании проекта автоматически создаётся файл-заготовка (`main.py` или `index.js`) с шаблонным кодом.
 - Дерево файлов возвращается рекурсивно, папки идут перед файлами.
 
 **База данных — таблицы:**
+
 - `projects` — мета-данные проектов
 
 ---
@@ -248,6 +255,7 @@ STORAGE_PATH/
 Управляет заданиями, экзаменами и сессиями студентов.
 
 **Особенности:**
+
 - Скрытые тест-кейсы (`isHidden: true`) не видны студентам — их `input` и `expectedOutput` заменяются на `***`.
 - Экзамены создаются с уникальным `inviteToken` (nanoid, 32 символа).
 - При старте сессии автоматически создаётся проект студента через fs-service.
@@ -255,6 +263,7 @@ STORAGE_PATH/
 - 3 античит-предупреждения → автоматическая дисквалификация + заморозка проекта.
 
 **База данных — таблицы:**
+
 - `tasks` — задания
 - `test_cases` — тест-кейсы к заданиям
 - `exams` — экзамены
@@ -270,6 +279,7 @@ STORAGE_PATH/
 Безопасный запуск пользовательского кода в изолированных Docker-контейнерах.
 
 **Особенности:**
+
 - Каждый запуск — отдельный Docker-контейнер (`--rm`).
 - Файлы проекта монтируются только на чтение (`ro`).
 - Очередь на основе BullMQ + Redis: `concurrency = MAX_CONCURRENT_RUNS`.
@@ -278,30 +288,31 @@ STORAGE_PATH/
 
 **Docker-ограничения для пользовательского кода:**
 
-| Ограничение | Значение |
-|---|---|
-| Сеть | `--network=none` |
-| RAM | `--memory=128m` |
-| Swap | `--memory-swap=128m` |
-| CPU | `--cpus=0.5` |
-| Процессы | `--pids-limit=50` |
+| Ограничение      | Значение                                  |
+| ---------------- | ----------------------------------------- |
+| Сеть             | `--network=none`                          |
+| RAM              | `--memory=128m`                           |
+| Swap             | `--memory-swap=128m`                      |
+| CPU              | `--cpus=0.5`                              |
+| Процессы         | `--pids-limit=50`                         |
 | Файловая система | `--read-only` (только `/tmp` через tmpfs) |
-| Пользователь | `--user=nobody` |
-| Таймаут | `CODE_TIMEOUT_MS` (по умолчанию 15 сек) |
-| Максимум вывода | 512 КБ |
+| Пользователь     | `--user=nobody`                           |
+| Таймаут          | `CODE_TIMEOUT_MS` (по умолчанию 15 сек)   |
+| Максимум вывода  | 512 КБ                                    |
 
 **Docker-образы:**
 
-| Язык | Образ |
-|---|---|
-| Python | `python:3.12-slim` |
-| JavaScript | `node:20-slim` |
+| Язык       | Образ              |
+| ---------- | ------------------ |
+| Python     | `python:3.12-slim` |
+| JavaScript | `node:20-slim`     |
 
 ---
 
 ## 5. API Reference
 
 > Все ответы имеют формат:
+>
 > ```json
 > { "ok": true, "data": <payload> }      // успех
 > { "ok": false, "error": "<сообщение>" } // ошибка
@@ -310,6 +321,7 @@ STORAGE_PATH/
 > Базовый URL: `http://localhost:4000`
 >
 > Для защищённых маршрутов передавать заголовок:
+>
 > ```
 > Authorization: Bearer <accessToken>
 > ```
@@ -323,6 +335,7 @@ STORAGE_PATH/
 Регистрация нового пользователя. Публичный.
 
 **Body:**
+
 ```json
 {
   "email": "user@example.com",
@@ -332,6 +345,7 @@ STORAGE_PATH/
 ```
 
 **Ответ `201`:**
+
 ```json
 {
   "ok": true,
@@ -351,6 +365,7 @@ STORAGE_PATH/
 Вход в систему. Публичный.
 
 **Body:**
+
 ```json
 {
   "email": "user@example.com",
@@ -359,6 +374,7 @@ STORAGE_PATH/
 ```
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -378,6 +394,7 @@ STORAGE_PATH/
 Обновление пары токенов. Публичный. Старый refresh-токен инвалидируется.
 
 **Body:**
+
 ```json
 {
   "refreshToken": "eyJ..."
@@ -395,6 +412,7 @@ STORAGE_PATH/
 Выход. Инвалидирует refresh-токен. Требует JWT.
 
 **Body:**
+
 ```json
 {
   "refreshToken": "eyJ..."
@@ -410,6 +428,7 @@ STORAGE_PATH/
 Данные текущего пользователя. Требует JWT.
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -449,6 +468,7 @@ STORAGE_PATH/
 Изменить роль пользователя. Требует роль `admin`.
 
 **Body:**
+
 ```json
 {
   "role": "teacher"
@@ -468,6 +488,7 @@ STORAGE_PATH/
 Создать группу. Требует роль `admin`.
 
 **Body:**
+
 ```json
 {
   "name": "ИТ-21"
@@ -501,6 +522,7 @@ STORAGE_PATH/
 Добавить студента в группу. Требует роль `admin` или `teacher`.
 
 **Body:**
+
 ```json
 {
   "userId": "uuid"
@@ -528,6 +550,7 @@ STORAGE_PATH/
 Создать проект. Автоматически создаёт файл-заготовку на диске.
 
 **Body:**
+
 ```json
 {
   "name": "my-project",
@@ -538,6 +561,7 @@ STORAGE_PATH/
 ```
 
 **Ответ `201`:**
+
 ```json
 {
   "ok": true,
@@ -576,6 +600,7 @@ STORAGE_PATH/
 Дерево файлов проекта. Папки идут первыми, затем файлы (сортировка по имени).
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -584,9 +609,7 @@ STORAGE_PATH/
       "name": "src",
       "path": "src",
       "type": "dir",
-      "children": [
-        { "name": "main.py", "path": "src/main.py", "type": "file" }
-      ]
+      "children": [{ "name": "main.py", "path": "src/main.py", "type": "file" }]
     },
     { "name": "main.py", "path": "main.py", "type": "file" }
   ]
@@ -602,6 +625,7 @@ STORAGE_PATH/
 **Query params:** `path` — относительный путь от корня проекта (обязателен).
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -619,6 +643,7 @@ STORAGE_PATH/
 Сохранить содержимое файла. Создаёт директории автоматически. Запрещён для readonly-проектов.
 
 **Body:**
+
 ```json
 {
   "path": "src/main.py",
@@ -635,6 +660,7 @@ STORAGE_PATH/
 Создать пустой файл или директорию. Запрещён для readonly-проектов.
 
 **Body:**
+
 ```json
 {
   "path": "src/utils.py",
@@ -663,6 +689,7 @@ STORAGE_PATH/
 Переименовать или переместить файл/директорию. Запрещён для readonly-проектов.
 
 **Body:**
+
 ```json
 {
   "oldPath": "main.py",
@@ -681,6 +708,7 @@ STORAGE_PATH/
 Создать задание. Требует роль `teacher` или `admin`.
 
 **Body:**
+
 ```json
 {
   "title": "Задание 1: Сортировка",
@@ -716,6 +744,7 @@ STORAGE_PATH/
 Обновить задание. Только автор или `admin`.
 
 **Body (все поля опциональны):**
+
 ```json
 {
   "title": "Новое название",
@@ -742,6 +771,7 @@ STORAGE_PATH/
 Добавить тест-кейс к заданию. Требует роль `teacher` или `admin`.
 
 **Body:**
+
 ```json
 {
   "input": "5\n3",
@@ -761,6 +791,7 @@ STORAGE_PATH/
 Обновить тест-кейс. Требует роль `teacher` или `admin`.
 
 **Body (все поля опциональны):**
+
 ```json
 {
   "input": "новый ввод",
@@ -789,6 +820,7 @@ STORAGE_PATH/
 Создать экзамен. Требует роль `teacher` или `admin`. Автоматически генерируется `inviteToken`.
 
 **Body:**
+
 ```json
 {
   "taskId": "uuid",
@@ -858,6 +890,7 @@ STORAGE_PATH/
 Информация об экзамене по инвайт-ссылке.
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -910,6 +943,7 @@ STORAGE_PATH/
 Зафиксировать античит-событие. Требует JWT. 3 события → дисквалификация.
 
 **Body:**
+
 ```json
 {
   "eventType": "tab_blur",
@@ -920,6 +954,7 @@ STORAGE_PATH/
 Допустимые `eventType`: `tab_blur`, `window_minimize`, `paste_attempt`, `devtools_open`.
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -941,6 +976,7 @@ STORAGE_PATH/
 Запустить все тест-кейсы задания против кода студента. Сохраняет первый результат как `Submission`.
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -1001,6 +1037,7 @@ STORAGE_PATH/
 Разовый запуск файла. Требует JWT.
 
 **Body:**
+
 ```json
 {
   "projectId": "uuid",
@@ -1011,6 +1048,7 @@ STORAGE_PATH/
 ```
 
 **Ответ `200`:**
+
 ```json
 {
   "ok": true,
@@ -1033,15 +1071,14 @@ STORAGE_PATH/
 Прогон тест-кейсов. Вызывается из task-service. JWT не требуется (межсервисный вызов).
 
 **Body:**
+
 ```json
 {
   "projectId": "uuid",
   "userId": "uuid",
   "language": "python",
   "entryFile": "main.py",
-  "testCases": [
-    { "input": "5\n3", "expectedOutput": "8" }
-  ]
+  "testCases": [{ "input": "5\n3", "expectedOutput": "8" }]
 }
 ```
 
@@ -1082,9 +1119,10 @@ STORAGE_PATH/
 ```
 
 При подключении сервер отправляет приветственное сообщение:
+
 ```
 ✓ Терминал подключён (python)
-$ 
+$
 ```
 
 ---
@@ -1095,12 +1133,12 @@ $
 
 ```typescript
 {
-  id: string           // UUID
-  email: string
-  fullName: string
-  role: 'student' | 'teacher' | 'admin'
-  groupId: string | null
-  createdAt: string    // ISO 8601
+  id: string; // UUID
+  email: string;
+  fullName: string;
+  role: "student" | "teacher" | "admin";
+  groupId: string | null;
+  createdAt: string; // ISO 8601
 }
 ```
 
@@ -1119,13 +1157,13 @@ $
 
 ```typescript
 {
-  id: string
-  userId: string
-  taskId: string | null
-  name: string
-  language: 'python' | 'javascript'
-  isReadonly: boolean
-  createdAt: string
+  id: string;
+  userId: string;
+  taskId: string | null;
+  name: string;
+  language: "python" | "javascript";
+  isReadonly: boolean;
+  createdAt: string;
 }
 ```
 
@@ -1149,13 +1187,13 @@ $
 
 ```typescript
 {
-  id: string
-  taskId: string
-  input: string
-  expectedOutput: string
-  isHidden: boolean      // скрытые не видны студентам
-  points: number         // баллы за тест-кейс
-  orderIndex: number
+  id: string;
+  taskId: string;
+  input: string;
+  expectedOutput: string;
+  isHidden: boolean; // скрытые не видны студентам
+  points: number; // баллы за тест-кейс
+  orderIndex: number;
 }
 ```
 
@@ -1163,16 +1201,16 @@ $
 
 ```typescript
 {
-  id: string
-  taskId: string
-  title: string
-  inviteToken: string    // nanoid(32), уникальный
-  openMode: 'manual' | 'scheduled'
-  startsAt: string | null
-  endsAt: string | null
-  status: 'draft' | 'active' | 'closed'
-  createdBy: string
-  createdAt: string
+  id: string;
+  taskId: string;
+  title: string;
+  inviteToken: string; // nanoid(32), уникальный
+  openMode: "manual" | "scheduled";
+  startsAt: string | null;
+  endsAt: string | null;
+  status: "draft" | "active" | "closed";
+  createdBy: string;
+  createdAt: string;
 }
 ```
 
@@ -1212,12 +1250,12 @@ $
 
 ```typescript
 {
-  id: string
-  sessionId: string
-  userId: string
-  eventType: 'tab_blur' | 'window_minimize' | 'paste_attempt' | 'devtools_open'
-  occurredAt: string
-  details: object | null
+  id: string;
+  sessionId: string;
+  userId: string;
+  eventType: "tab_blur" | "window_minimize" | "paste_attempt" | "devtools_open";
+  occurredAt: string;
+  details: object | null;
 }
 ```
 
@@ -1236,35 +1274,36 @@ $
 
 ## 7. Система ролей и доступа
 
-| Маршрут | student | teacher | admin |
-|---|:---:|:---:|:---:|
-| `POST /auth/register` | ✓ | ✓ | ✓ |
-| `GET /auth/me` | ✓ | ✓ | ✓ |
-| `GET /auth/users` | — | — | ✓ |
-| `GET /auth/users/:id` | — | ✓ | ✓ |
-| `PATCH /auth/users/:id/role` | — | — | ✓ |
-| `POST /auth/groups` | — | — | ✓ |
-| `GET /auth/groups` | — | ✓ | ✓ |
-| `POST /auth/groups/:id/members` | — | ✓ | ✓ |
-| `DELETE /auth/groups/:id/members/:userId` | — | ✓ | ✓ |
-| `POST /fs/projects` | ✓ | ✓ | ✓ |
-| `GET /fs/:id/tree` | свой | любой | любой |
-| `PUT /fs/:id/file` | свой (не readonly) | ✓ | ✓ |
-| `POST /tasks` | — | ✓ | ✓ |
-| `GET /tasks/:id` | ✓ (без hidden) | ✓ | ✓ |
-| `PATCH /tasks/:id` | — | автор | ✓ |
-| `POST /tasks/:id/test-cases` | — | ✓ | ✓ |
-| `POST /exams` | — | ✓ | ✓ |
-| `PATCH /exams/:id/open` | — | ✓ | ✓ |
-| `GET /exams/:id/results` | — | ✓ | ✓ |
-| `POST /sessions/:examId/start` | ✓ | — | — |
-| `POST /sessions/:examId/warn` | ✓ | — | — |
-| `POST /sessions/:examId/submit` | ✓ | — | — |
-| `POST /runner/run` | ✓ | ✓ | ✓ |
+| Маршрут                                   |      student       | teacher | admin |
+| ----------------------------------------- | :----------------: | :-----: | :---: |
+| `POST /auth/register`                     |         ✓          |    ✓    |   ✓   |
+| `GET /auth/me`                            |         ✓          |    ✓    |   ✓   |
+| `GET /auth/users`                         |         —          |    —    |   ✓   |
+| `GET /auth/users/:id`                     |         —          |    ✓    |   ✓   |
+| `PATCH /auth/users/:id/role`              |         —          |    —    |   ✓   |
+| `POST /auth/groups`                       |         —          |    —    |   ✓   |
+| `GET /auth/groups`                        |         —          |    ✓    |   ✓   |
+| `POST /auth/groups/:id/members`           |         —          |    ✓    |   ✓   |
+| `DELETE /auth/groups/:id/members/:userId` |         —          |    ✓    |   ✓   |
+| `POST /fs/projects`                       |         ✓          |    ✓    |   ✓   |
+| `GET /fs/:id/tree`                        |        свой        |  любой  | любой |
+| `PUT /fs/:id/file`                        | свой (не readonly) |    ✓    |   ✓   |
+| `POST /tasks`                             |         —          |    ✓    |   ✓   |
+| `GET /tasks/:id`                          |   ✓ (без hidden)   |    ✓    |   ✓   |
+| `PATCH /tasks/:id`                        |         —          |  автор  |   ✓   |
+| `POST /tasks/:id/test-cases`              |         —          |    ✓    |   ✓   |
+| `POST /exams`                             |         —          |    ✓    |   ✓   |
+| `PATCH /exams/:id/open`                   |         —          |    ✓    |   ✓   |
+| `GET /exams/:id/results`                  |         —          |    ✓    |   ✓   |
+| `POST /sessions/:examId/start`            |         ✓          |    —    |   —   |
+| `POST /sessions/:examId/warn`             |         ✓          |    —    |   —   |
+| `POST /sessions/:examId/submit`           |         ✓          |    —    |   —   |
+| `POST /runner/run`                        |         ✓          |    ✓    |   ✓   |
 
 ### Межсервисная аутентификация
 
 Gateway после верификации JWT добавляет заголовки:
+
 ```
 x-user-id:    <userId>
 x-user-email: <email>
@@ -1281,14 +1320,15 @@ Downstream-сервисы (fs, task, runner) читают пользовател
 
 **Отслеживаемые события:**
 
-| `eventType` | Описание |
-|---|---|
-| `tab_blur` | Студент переключился на другую вкладку |
-| `window_minimize` | Окно браузера свёрнуто |
-| `paste_attempt` | Попытка вставки текста |
-| `devtools_open` | Открыты DevTools |
+| `eventType`       | Описание                               |
+| ----------------- | -------------------------------------- |
+| `tab_blur`        | Студент переключился на другую вкладку |
+| `window_minimize` | Окно браузера свёрнуто                 |
+| `paste_attempt`   | Попытка вставки текста                 |
+| `devtools_open`   | Открыты DevTools                       |
 
 **Логика предупреждений:**
+
 - Каждое событие → `warningsCount++` + запись в `anticheat_logs`.
 - При `warningsCount >= 3` → статус сессии меняется на `disqualified`, проект замораживается.
 - Преподаватель видит журнал через `GET /api/exams/:id/sessions/:sessionId/anticheat`.
@@ -1314,26 +1354,62 @@ Downstream-сервисы (fs, task, runner) читают пользовател
 
 ```typescript
 // user.ts
-type UserRole = 'student' | 'teacher' | 'admin'
-interface User { id, email, fullName, role, groupId, createdAt }
-interface AuthTokens { accessToken, refreshToken }
+type UserRole = "student" | "teacher" | "admin";
+interface User {
+  id;
+  email;
+  fullName;
+  role;
+  groupId;
+  createdAt;
+}
+interface AuthTokens {
+  accessToken;
+  refreshToken;
+}
 
 // jwt.ts
-interface JwtPayload { sub, email, role, iat, exp }
+interface JwtPayload {
+  sub;
+  email;
+  role;
+  iat;
+  exp;
+}
 interface GatewayHeaders {
-  'x-user-id': string
-  'x-user-role': UserRole
-  'x-user-email': string
+  "x-user-id": string;
+  "x-user-role": UserRole;
+  "x-user-email": string;
 }
 
 // response.ts
-interface ApiSuccess<T> { ok: true; data: T }
-interface ApiError { ok: false; error: string; code?: string }
-type ApiResponse<T> = ApiSuccess<T> | ApiError
+interface ApiSuccess<T> {
+  ok: true;
+  data: T;
+}
+interface ApiError {
+  ok: false;
+  error: string;
+  code?: string;
+}
+type ApiResponse<T> = ApiSuccess<T> | ApiError;
 
 // events.ts
-type AntiCheatEventType = 'tab_blur' | 'window_minimize' | 'paste_attempt' | 'devtools_open'
-interface AntiCheatEvent { sessionId, userId, eventType, occurredAt, details? }
-interface ExamStatusChangedEvent { examId, status, changedAt }
+type AntiCheatEventType =
+  | "tab_blur"
+  | "window_minimize"
+  | "paste_attempt"
+  | "devtools_open";
+interface AntiCheatEvent {
+  sessionId;
+  userId;
+  eventType;
+  occurredAt;
+  details?;
+}
+interface ExamStatusChangedEvent {
+  examId;
+  status;
+  changedAt;
+}
 ```
-````

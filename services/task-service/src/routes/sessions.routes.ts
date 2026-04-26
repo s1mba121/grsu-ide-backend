@@ -127,6 +127,13 @@ export async function sessionsRoutes(app: FastifyInstance) {
                     status: status as any,
                     resultsJson: results,
                 })
+            } else {
+                await SessionRepository.updateSubmission(session.id, {
+                    score,
+                    maxScore,
+                    status: status as any,
+                    resultsJson: results,
+                })
             }
 
             // Студент видит только открытые тесты

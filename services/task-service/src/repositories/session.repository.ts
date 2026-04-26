@@ -13,7 +13,7 @@ export const SessionRepository = {
             where: { examId_userId: { examId, userId } },
             include: {
                 submission: true,
-                task: { select: { timeLimitMin: true } },  // ← добавить
+                task: { select: { timeLimitMin: true, language: true } },
             },
         })
     },
@@ -24,6 +24,16 @@ export const SessionRepository = {
             include: {
                 exam: true,           // убираем include task из exam
                 submission: true,
+            },
+        })
+    },
+
+    async findByExamAndSessionId(examId: string, sessionId: string) {
+        return prisma.examSession.findFirst({
+            where: { examId, id: sessionId },
+            include: {
+                submission: true,
+                task: { select: { timeLimitMin: true, language: true } },
             },
         })
     },
@@ -65,6 +75,18 @@ export const SessionRepository = {
         resultsJson: object
     }) {
         return prisma.submission.create({ data })
+    },
+
+    async updateSubmission(sessionId: string, data: {
+        score: number
+        maxScore: number
+        status: SubmissionStatus
+        resultsJson: object
+    }) {
+        return prisma.submission.update({
+            where: { sessionId },
+            data,
+        })
     },
 
     async findSubmission(sessionId: string) {

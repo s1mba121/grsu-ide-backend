@@ -36,8 +36,8 @@ export async function groupsRoutes(app: FastifyInstance) {
         return reply.send({ ok: true, data: group })
     })
 
-    // POST /groups/:id/members — добавить студента
-    app.post('/groups/:id/members', { preHandler: requireAuth(['admin', 'teacher']) }, async (req, reply) => {
+    // POST /groups/:id/members — добавить студента (только admin)
+    app.post('/groups/:id/members', { preHandler: requireAuth(['admin']) }, async (req, reply) => {
         const { id } = req.params as { id: string }
         const schema = z.object({ userId: z.string().uuid() })
         const result = schema.safeParse(req.body)
@@ -54,8 +54,8 @@ export async function groupsRoutes(app: FastifyInstance) {
         }
     })
 
-    // DELETE /groups/:id/members/:userId
-    app.delete('/groups/:id/members/:userId', { preHandler: requireAuth(['admin', 'teacher']) }, async (req, reply) => {
+    // DELETE /groups/:id/members/:userId (только admin)
+    app.delete('/groups/:id/members/:userId', { preHandler: requireAuth(['admin']) }, async (req, reply) => {
         const { userId } = req.params as { id: string; userId: string }
         try {
             await GroupRepository.removeMember(userId)

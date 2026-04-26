@@ -6,6 +6,12 @@ import { config } from '../config.js'
 import type { OpenMode } from '@prisma/client'
 import { prisma } from '../db.js'
 
+function isSessionExpired(session: { startedAt: Date; task?: { timeLimitMin?: number } | null }) {
+    const limitMin = session.task?.timeLimitMin ?? 60
+    const limitMs = limitMin * 60 * 1000
+    return Date.now() > new Date(session.startedAt).getTime() + limitMs
+}
+
 // Создать проект студента через fs-service
 async function createStudentProject(
     userId: string,
@@ -80,6 +86,23 @@ async function freezeProject(userId: string, projectId: string) {
 }
 
 export const ExamService = {
+    async getSession(examId: string, userId: string) {
+        const session = await SessionRepository.findByExamAndUser(examId, userId)
+        if (!session) throw { statusCode: 404, message: 'Сессия не найдена' }
+
+        if (session.status === 'in_progress' && isSessionExpired(session)) {
+            await SessionRepository.updateStatus(session.id, 'submitted', new Date())
+            await freezeProject(session.userId, session.projectId)
+            return {
+                ...session,
+                status: 'submitted' as const,
+                finishedAt: new Date(),
+            }
+        }
+
+        return session
+    },
+
     async createExam(data: {
         taskId?: string
         folderId?: string
@@ -117,7 +140,20 @@ export const ExamService = {
         if (!isParticipant) throw { statusCode: 403, message: 'Вы не зарегистрированы на этот экзамен' }
 
         const existing = await SessionRepository.findByExamAndUser(examId, userId)
-        if (existing) return existing
+        if (existing) {
+            if (existing.status === 'disqualified') {
+                throw { statusCode: 403, message: 'Вы дисквалифицированы и не можете продолжить экзамен' }
+            }
+            if (existing.status === 'submitted') {
+                throw { statusCode: 403, message: 'Экзамен уже завершен' }
+            }
+            if (isSessionExpired(existing)) {
+                await SessionRepository.updateStatus(existing.id, 'submitted', new Date())
+                await freezeProject(existing.userId, existing.projectId)
+                throw { statusCode: 403, message: 'Время экзамена истекло' }
+            }
+            return existing
+        }
 
         let taskId: string
         if (exam.taskId) {

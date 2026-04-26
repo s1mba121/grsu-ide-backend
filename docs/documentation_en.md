@@ -1,336 +1,278 @@
-# GRSU IDE Backend — Documentation
+# GRSU IDE Backend - Full Technical Documentation
 
 ## Table of Contents
 
-1. [Architecture Overview](#1-architecture-overview)
-2. [Quick Start](#2-quick-start)
-3. [Environment Variables](#3-environment-variables)
-4. [Services](#4-services)
-5. [API Reference](#5-api-reference)
-6. [Data Models](#6-data-models)
-7. [Roles & Access Control](#7-roles--access-control)
-8. [Anti-Cheat System](#8-anti-cheat-system)
-9. [Code Execution Security](#9-code-execution-security)
-10. [Shared Types](#10-shared-types)
+1. [System Overview](#1-system-overview)
+2. [Architecture and Request Flow](#2-architecture-and-request-flow)
+3. [Quick Start](#3-quick-start)
+4. [Environment Configuration](#4-environment-configuration)
+5. [Services and Responsibilities](#5-services-and-responsibilities)
+6. [API Conventions](#6-api-conventions)
+7. [Detailed API Reference](#7-detailed-api-reference)
+8. [Realtime Interfaces (SSE and WebSocket)](#8-realtime-interfaces-sse-and-websocket)
+9. [Data Model Reference](#9-data-model-reference)
+10. [Access Control Matrix](#10-access-control-matrix)
+11. [Anti-Cheat Workflow](#11-anti-cheat-workflow)
+12. [Code Execution Security Model](#12-code-execution-security-model)
+13. [Operational Notes and Documentation Policy](#13-operational-notes-and-documentation-policy)
 
 ---
 
-## 1. Architecture Overview
+## 1. System Overview
 
-GRSU IDE Backend is a microservices monorepo for an educational IDE platform. The client communicates only with the **Gateway** (port `4000`), which proxies requests to internal services.
+GRSU IDE Backend is a microservice backend for browser-based programming exams.
+
+Main use cases:
+
+- Student joins an exam via invite token, writes code, runs tests, submits solution.
+- Teacher creates tasks and exams, monitors sessions and anti-cheat events.
+- Admin manages users, roles, and groups.
+
+All external traffic is expected to enter through `gateway` (`:4000`).
+
+---
+
+## 2. Architecture and Request Flow
 
 ```
 Client
-  │
-  ▼
-Gateway :4000  ──── JWT verification
-  │
-  ├──► Auth Service    :3001  (PostgreSQL)
-  ├──► FS Service      :3002  (PostgreSQL + Disk Storage)
-  ├──► Task Service    :3003  (PostgreSQL)
-  └──► Runner Service  :3004  (Redis + Docker)
+  |
+  v
+Gateway :4000 (JWT verify + proxy + header injection)
+  |- /api/auth         -> auth-service   :3001
+  |- /api/fs           -> fs-service     :3002
+  |- /api/tasks        -> task-service   :3003
+  |- /api/task-folders -> task-service   :3003
+  |- /api/exams        -> task-service   :3003
+  |- /api/sessions     -> task-service   :3003
+  \- /api/runner       -> runner-service :3004
 ```
 
-**Stack:** Node.js, TypeScript, Fastify, Prisma ORM, PostgreSQL, Redis, Docker, BullMQ.
+Technical stack:
 
-**Monorepo structure (npm workspaces):**
+- Node.js 20+, TypeScript
+- Fastify
+- Prisma + PostgreSQL
+- Redis + BullMQ
+- Docker (sandbox execution)
+- WebSocket (`@fastify/websocket`)
 
-```
-grsu-ide-backend/
-├── services/
-│   ├── auth-service/
-│   ├── fs-service/
-│   ├── task-service/
-│   ├── runner-service/
-│   └── gateway/
-└── shared/
-    └── types/          # @grsu/types — shared TypeScript types
-```
+Gateway auth behavior:
 
----
+- Verifies JWT for non-public paths.
+- Supports JWT via:
+  - `Authorization: Bearer <token>`
+  - query parameter `?token=<token>` (used by SSE scenarios)
+- Injects trusted headers:
+  - `x-user-id`
+  - `x-user-email`
+  - `x-user-role`
+  - `x-user-fullname`
+  - `x-user-groupid`
 
-## 2. Quick Start
-
-### Requirements
-
-- Docker & Docker Compose
-- Node.js 20+
-- npm 10+
-
-### Running in dev mode
-
-```bash
-# 1. Clone the repository and install dependencies
-npm install
-
-# 2. Copy and fill in environment variables
-cp .env.example .env
-
-# 3. Start all services via Docker Compose
-docker compose -f docker-compose.dev.yml up --build
-
-# 4. Apply migrations (in a separate terminal, after postgres starts)
-npm run prisma:generate:all
-```
-
-### Running individual services locally
-
-```bash
-npm run dev:auth     # auth-service on :3001
-npm run dev:gateway  # gateway on :4000
-```
-
-### Building all services
-
-```bash
-npm run build
-```
-
----
-
-## 3. Environment Variables
-
-### Root (`.env`)
-
-| Variable              | Description            | Example             |
-| --------------------- | ---------------------- | ------------------- |
-| `POSTGRES_USER`       | PostgreSQL user        | `grsu`              |
-| `POSTGRES_PASSWORD`   | PostgreSQL password    | `change_me`         |
-| `POSTGRES_DB`         | Database name          | `grsu_ide`          |
-| `JWT_ACCESS_SECRET`   | Access token secret    | `change_me_access`  |
-| `JWT_REFRESH_SECRET`  | Refresh token secret   | `change_me_refresh` |
-| `JWT_ACCESS_EXPIRES`  | Access token lifetime  | `15m`               |
-| `JWT_REFRESH_EXPIRES` | Refresh token lifetime | `7d`                |
-| `BCRYPT_ROUNDS`       | bcrypt hashing rounds  | `12`                |
-
-### Per-service
-
-#### Auth Service
-
-| Variable              | Description                    |
-| --------------------- | ------------------------------ |
-| `PORT`                | Service port (default `3001`)  |
-| `DATABASE_URL`        | PostgreSQL DSN                 |
-| `JWT_ACCESS_SECRET`   | Secret for signing access JWT  |
-| `JWT_REFRESH_SECRET`  | Secret for signing refresh JWT |
-| `JWT_ACCESS_EXPIRES`  | Access token lifetime          |
-| `JWT_REFRESH_EXPIRES` | Refresh token lifetime         |
-| `BCRYPT_ROUNDS`       | bcrypt rounds                  |
-
-#### FS Service
-
-| Variable       | Description                   |
-| -------------- | ----------------------------- |
-| `PORT`         | Service port (default `3002`) |
-| `DATABASE_URL` | PostgreSQL DSN                |
-| `STORAGE_PATH` | Root path for file storage    |
-
-#### Task Service
-
-| Variable             | Description                   |
-| -------------------- | ----------------------------- |
-| `PORT`               | Service port (default `3003`) |
-| `DATABASE_URL`       | PostgreSQL DSN                |
-| `FS_SERVICE_URL`     | URL of fs-service             |
-| `RUNNER_SERVICE_URL` | URL of runner-service         |
-
-#### Runner Service
-
-| Variable              | Description                                    |
-| --------------------- | ---------------------------------------------- |
-| `PORT`                | Service port (default `3004`)                  |
-| `REDIS_URL`           | Redis DSN                                      |
-| `FS_SERVICE_URL`      | URL of fs-service                              |
-| `STORAGE_PATH`        | Storage path (must match fs-service)           |
-| `CODE_TIMEOUT_MS`     | Code execution timeout in ms (default `15000`) |
-| `MAX_CONCURRENT_RUNS` | Max parallel containers (default `5`)          |
-
-#### Gateway
-
-| Variable             | Description                   |
-| -------------------- | ----------------------------- |
-| `PORT`               | Service port (default `4000`) |
-| `JWT_ACCESS_SECRET`  | Secret for JWT verification   |
-| `AUTH_SERVICE_URL`   | URL of auth-service           |
-| `FS_SERVICE_URL`     | URL of fs-service             |
-| `TASK_SERVICE_URL`   | URL of task-service           |
-| `RUNNER_SERVICE_URL` | URL of runner-service         |
-
----
-
-## 4. Services
-
-### 4.1 Gateway (port 4000)
-
-Single entry point. Responsible for:
-
-- **JWT verification** for all requests except public routes.
-- **Injecting headers** `x-user-id`, `x-user-email`, `x-user-role` into downstream requests.
-- **Proxying** requests by prefix rules.
-
-**Public routes** (no JWT required):
+Public paths in current gateway implementation:
 
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/refresh`
+- `GET /api/auth/groups`
 - `GET /api/exams/join/:token`
 - `GET /health`
 
-**Routing table:**
-
-| Prefix          | Forwarded to        | Rewrite     |
-| --------------- | ------------------- | ----------- |
-| `/api/auth`     | auth-service:3001   | `/auth`     |
-| `/api/fs`       | fs-service:3002     | `/fs`       |
-| `/api/tasks`    | task-service:3003   | `/tasks`    |
-| `/api/exams`    | task-service:3003   | `/exams`    |
-| `/api/sessions` | task-service:3003   | `/sessions` |
-| `/api/runner`   | runner-service:3004 | `/runner`   |
-
 ---
 
-### 4.2 Auth Service (port 3001)
+## 3. Quick Start
 
-Manages authentication, users, and groups.
+### Requirements
 
-**Details:**
+- Docker and Docker Compose
+- Node.js 20+
+- npm 10+
 
-- Passwords are hashed via `bcryptjs`.
-- Refresh tokens are stored in the DB. On refresh, the token is immediately deleted (token rotation). Reusing a refresh token invalidates all tokens for that user.
-- Access tokens are signed with `JWT_ACCESS_SECRET`, refresh tokens with `JWT_REFRESH_SECRET`.
+### Bootstrapping
 
-**Database tables:**
-
-- `groups` — study groups
-- `users` — users (roles: `student`, `teacher`, `admin`)
-- `refresh_tokens` — refresh token storage
-
----
-
-### 4.3 FS Service (port 3002)
-
-Manages projects and files on disk.
-
-**Disk storage structure:**
-
-```
-STORAGE_PATH/
-└── users/
-    └── {userId}/
-        └── projects/
-            └── {projectId}/
-                ├── main.py       # or index.js
-                └── ...
+```bash
+npm install
+cp .env.example .env
+docker compose -f docker-compose.dev.yml up --build
+npm run prisma:generate:all
 ```
 
-**Details:**
+### Common commands
 
-- Path traversal protection: paths are checked via `resolved.startsWith(root)`.
-- `isReadonly` flag on a project: after submission, the student cannot modify files.
-- On project creation, a boilerplate file (`main.py` or `index.js`) is automatically created with template code.
-- The file tree is returned recursively; directories come before files.
+```bash
+npm run dev:auth
+npm run dev:gateway
+npm run build
+```
 
-**Database tables:**
+Default ports:
 
-- `projects` — project metadata
-
----
-
-### 4.4 Task Service (port 3003)
-
-Manages tasks, exams, and student sessions.
-
-**Details:**
-
-- Hidden test cases (`isHidden: true`) are not visible to students — their `input` and `expectedOutput` are replaced with `***`.
-- Exams are created with a unique `inviteToken` (nanoid, 32 chars).
-- When a session starts, the student's project is automatically created via fs-service.
-- After submission (`submit`), the project is frozen via fs-service (`isReadonly: true`).
-- 3 anti-cheat warnings → automatic disqualification + project freeze.
-
-**Database tables:**
-
-- `tasks` — tasks
-- `test_cases` — test cases for tasks
-- `exams` — exams
-- `exam_participants` — exam participants
-- `exam_sessions` — student sessions
-- `anticheat_logs` — violation log
-- `submissions` — submission results
+- Gateway: `4000`
+- Auth: `3001`
+- FS: `3002`
+- Task: `3003`
+- Runner: `3004`
 
 ---
 
-### 4.5 Runner Service (port 3004)
+## 4. Environment Configuration
 
-Secure execution of user code in isolated Docker containers.
+### Root `.env`
 
-**Details:**
+| Variable | Description |
+| --- | --- |
+| `POSTGRES_USER` | PostgreSQL user |
+| `POSTGRES_PASSWORD` | PostgreSQL password |
+| `POSTGRES_DB` | PostgreSQL database |
+| `JWT_ACCESS_SECRET` | Access token secret |
+| `JWT_REFRESH_SECRET` | Refresh token secret |
+| `JWT_ACCESS_EXPIRES` | Access token TTL |
+| `JWT_REFRESH_EXPIRES` | Refresh token TTL |
+| `BCRYPT_ROUNDS` | Password hashing rounds |
 
-- Each run is a separate Docker container (`--rm`).
-- Project files are mounted read-only (`ro`).
-- Queue based on BullMQ + Redis: `concurrency = MAX_CONCURRENT_RUNS`.
-- Interactive terminal support via WebSocket (`@fastify/websocket`).
-- Output is normalized before comparison (`trim()` + `trimEnd()` per line).
+### Gateway (`services/gateway`)
 
-**Docker restrictions for user code:**
+- `PORT`
+- `JWT_ACCESS_SECRET`
+- `AUTH_SERVICE_URL`
+- `FS_SERVICE_URL`
+- `TASK_SERVICE_URL`
+- `RUNNER_SERVICE_URL`
+- `NODE_ENV`
 
-| Restriction | Value                                 |
-| ----------- | ------------------------------------- |
-| Network     | `--network=none`                      |
-| RAM         | `--memory=128m`                       |
-| Swap        | `--memory-swap=128m`                  |
-| CPU         | `--cpus=0.5`                          |
-| Processes   | `--pids-limit=50`                     |
-| Filesystem  | `--read-only` (only `/tmp` via tmpfs) |
-| User        | `--user=nobody`                       |
-| Timeout     | `CODE_TIMEOUT_MS` (default 15 sec)    |
-| Max output  | 512 KB                                |
+### Auth service (`services/auth-service`)
 
-**Docker images:**
+- `PORT`
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_EXPIRES`
+- `JWT_REFRESH_EXPIRES`
+- `BCRYPT_ROUNDS`
+- `SERVICE_KEY`
+- `NODE_ENV`
 
-| Language   | Image              |
-| ---------- | ------------------ |
-| Python     | `python:3.12-slim` |
-| JavaScript | `node:20-slim`     |
+### FS service (`services/fs-service`)
+
+- `PORT`
+- `DATABASE_URL`
+- `STORAGE_PATH`
+- `NODE_ENV`
+
+### Task service (`services/task-service`)
+
+- `PORT`
+- `DATABASE_URL`
+- `FS_SERVICE_URL`
+- `RUNNER_SERVICE_URL`
+- `AUTH_SERVICE_URL`
+- `SERVICE_KEY`
+- `NODE_ENV`
+
+### Runner service (`services/runner-service`)
+
+- `PORT`
+- `REDIS_URL`
+- `FS_SERVICE_URL`
+- `STORAGE_PATH`
+- `HOST_STORAGE_PATH`
+- `CODE_TIMEOUT_MS`
+- `MAX_CONCURRENT_RUNS`
+- `NODE_ENV`
 
 ---
 
-## 5. API Reference
+## 5. Services and Responsibilities
 
-> All responses follow this format:
->
-> ```json
-> { "ok": true, "data": <payload> }      // success
-> { "ok": false, "error": "<message>" }  // error
-> ```
->
-> Base URL: `http://localhost:4000`
->
-> For protected routes, pass the header:
->
-> ```
-> Authorization: Bearer <accessToken>
-> ```
+### Gateway
+
+- JWT verification and trust boundary.
+- Request proxying to downstream services.
+- SSE proxy handling for `/api/exams/:id/events`.
+
+### Auth service
+
+- Register/login/refresh/logout.
+- User and group management.
+- Refresh token rotation and replay protection.
+
+### FS service
+
+- Project metadata.
+- File tree and file operations.
+- Filesystem traversal protection and readonly enforcement.
+
+### Task service
+
+- Tasks and test cases.
+- Task folders.
+- Exams, participants, sessions, submissions, anti-cheat logs.
+
+### Runner service
+
+- On-demand code execution.
+- Batch testcase execution.
+- Interactive terminal over WebSocket.
 
 ---
 
-### 5.1 Authentication (`/api/auth`)
+## 6. API Conventions
 
-#### `POST /api/auth/register`
+Base URL:
 
-Register a new user. Public.
+- `http://localhost:4000`
 
-**Body:**
+Standard response envelope:
+
+```json
+{ "ok": true, "data": {} }
+{ "ok": false, "error": "Human readable error" }
+```
+
+Authentication:
+
+- Protected routes require access token.
+- Send either:
+  - `Authorization: Bearer <accessToken>`
+  - or `?token=<accessToken>` for SSE endpoint.
+
+Common HTTP statuses:
+
+- `200` success
+- `201` created
+- `400` validation / business precondition
+- `401` unauthorized
+- `403` forbidden
+- `404` not found
+- `409` conflict
+- `500` internal error
+
+---
+
+## 7. Detailed API Reference
+
+### 7.1 Auth and Users (`/api/auth`)
+
+#### `POST /api/auth/register` (public)
+
+Description:
+
+- Registers a new user and returns token pair.
+- Supports optional initial `groupId`.
+
+Body:
 
 ```json
 {
   "email": "user@example.com",
   "fullName": "John Doe",
-  "password": "minlength8"
+  "password": "password123",
+  "groupId": "c4fe2a53-5b32-4f6b-911f-8b4824a53f58"
 }
 ```
 
-**Response `201`:**
+Success response (`201`):
 
 ```json
 {
@@ -342,15 +284,14 @@ Register a new user. Public.
 }
 ```
 
-**Errors:** `400` — validation, `409` — email already exists.
+Errors:
 
----
+- `400`: invalid email/password/fullName
+- `409`: email already exists
 
-#### `POST /api/auth/login`
+#### `POST /api/auth/login` (public)
 
-Log in. Public.
-
-**Body:**
+Body:
 
 ```json
 {
@@ -359,7 +300,25 @@ Log in. Public.
 }
 ```
 
-**Response `200`:**
+Success (`200`): same token payload as register.  
+Errors: `401` invalid credentials.
+
+#### `POST /api/auth/refresh` (public)
+
+Description:
+
+- Exchanges refresh token for a new pair.
+- Old refresh token is invalidated (rotation).
+
+Body:
+
+```json
+{
+  "refreshToken": "eyJ..."
+}
+```
+
+Success (`200`):
 
 ```json
 {
@@ -371,33 +330,14 @@ Log in. Public.
 }
 ```
 
-**Errors:** `401` — invalid credentials.
+Errors:
 
----
-
-#### `POST /api/auth/refresh`
-
-Refresh token pair. Public. Old refresh token is invalidated.
-
-**Body:**
-
-```json
-{
-  "refreshToken": "eyJ..."
-}
-```
-
-**Response `200`:** New pair `{ accessToken, refreshToken }`.
-
-**Errors:** `401` — invalid/expired/already-used token.
-
----
+- `400`: missing token
+- `401`: invalid/expired/replayed token
 
 #### `POST /api/auth/logout`
 
-Log out. Invalidates the refresh token. Requires JWT.
-
-**Body:**
+Body:
 
 ```json
 {
@@ -405,15 +345,15 @@ Log out. Invalidates the refresh token. Requires JWT.
 }
 ```
 
-**Response `200`:** `{ "ok": true, "data": null }`
+Success (`200`):
 
----
+```json
+{ "ok": true, "data": null }
+```
 
 #### `GET /api/auth/me`
 
-Current user data. Requires JWT.
-
-**Response `200`:**
+Success (`200`):
 
 ```json
 {
@@ -429,124 +369,103 @@ Current user data. Requires JWT.
 }
 ```
 
----
+Errors:
 
-### 5.2 Users (`/api/auth`)
+- `401`: missing/invalid token
 
-#### `GET /api/auth/users`
+#### `GET /api/auth/users` (`admin`)
 
-List all users. Requires `admin` role.
-
-**Response `200`:** `{ "ok": true, "data": [ ...User[] ] }`
-
----
-
-#### `GET /api/auth/users/:id`
-
-User data by ID. Requires `admin` or `teacher` role.
-
-**Response `200`:** `{ "ok": true, "data": User }`
-
----
-
-#### `PATCH /api/auth/users/:id/role`
-
-Change user role. Requires `admin` role.
-
-**Body:**
+Success (`200`):
 
 ```json
-{
-  "role": "teacher"
-}
+{ "ok": true, "data": [{ "id": "uuid", "email": "u@x.com", "role": "student" }] }
 ```
 
-Allowed roles: `student`, `teacher`, `admin`.
+#### `GET /api/auth/users/:id` (`teacher`, `admin`)
 
-**Response `200`:** `{ "ok": true, "data": User }`
-
----
-
-### 5.3 Groups (`/api/auth`)
-
-#### `POST /api/auth/groups`
-
-Create a group. Requires `admin` role.
-
-**Body:**
+Success (`200`):
 
 ```json
-{
-  "name": "IT-21"
-}
+{ "ok": true, "data": { "id": "uuid", "email": "u@x.com", "role": "student" } }
 ```
 
-**Response `201`:** `{ "ok": true, "data": Group }`
+Errors: `404`.
 
-**Errors:** `409` — group with this name already exists.
+#### `PATCH /api/auth/users/:id/role` (`admin`)
 
----
+Body:
+
+```json
+{ "role": "teacher" }
+```
+
+Allowed values:
+
+- `student`
+- `teacher`
+- `admin`
+
+Success (`200`): updated user.
+
+#### `POST /api/auth/groups` (`admin`)
+
+Body:
+
+```json
+{ "name": "IT-21" }
+```
+
+Success (`201`): group object.  
+Errors: `409`.
 
 #### `GET /api/auth/groups`
 
-List groups. Requires `admin` or `teacher` role.
+Gateway treats this route as public.
 
-**Response `200`:** `{ "ok": true, "data": Group[] }`
+Success (`200`): group list.
 
----
+#### `GET /api/auth/groups/:id` (`teacher`, `admin`)
 
-#### `GET /api/auth/groups/:id`
+Returns group with members.  
+Errors: `404`.
 
-Group details with members. Requires `admin` or `teacher` role.
+#### `POST /api/auth/groups/:id/members` (`teacher`, `admin`)
 
-**Response `200`:** `{ "ok": true, "data": Group & { users: User[] } }`
-
----
-
-#### `POST /api/auth/groups/:id/members`
-
-Add a student to a group. Requires `admin` or `teacher` role.
-
-**Body:**
+Body:
 
 ```json
-{
-  "userId": "uuid"
-}
+{ "userId": "uuid" }
 ```
 
-**Response `200`:** `{ "ok": true, "data": User }`
+Success (`200`): user assigned to group.
+
+#### `DELETE /api/auth/groups/:id/members/:userId` (`teacher`, `admin`)
+
+Success (`200`): `{ ok: true, data: null }`.
 
 ---
 
-#### `DELETE /api/auth/groups/:id/members/:userId`
-
-Remove a student from a group. Requires `admin` or `teacher` role.
-
-**Response `200`:** `{ "ok": true, "data": null }`
-
----
-
-### 5.4 File System (`/api/fs`)
-
-All endpoints require JWT. A student can only access their own projects.
+### 7.2 File System (`/api/fs`)
 
 #### `POST /api/fs/projects`
 
-Create a project. Automatically creates a boilerplate file on disk.
+Description:
 
-**Body:**
+- Creates project metadata.
+- Initializes project files in storage (`main.py` or `index.js` by language).
+
+Body:
 
 ```json
 {
   "name": "my-project",
   "language": "python",
-  "taskId": "uuid (optional)",
-  "templateCode": "# starter code (optional)"
+  "taskId": "uuid-optional",
+  "templateCode": "# starter code optional"
 }
 ```
 
-**Response `201`:**
+Success (`201`):
 
 ```json
 {
@@ -563,54 +482,42 @@ Create a project. Automatically creates a boilerplate file on disk.
 }
 ```
 
----
-
 #### `GET /api/fs/projects`
 
-List current user's projects.
-
-**Response `200`:** `{ "ok": true, "data": Project[] }`
-
----
+Returns current user project list.
 
 #### `GET /api/fs/projects/:id`
 
-Project metadata. Students see only their own; teacher/admin see any.
+Access:
 
-**Response `200`:** `{ "ok": true, "data": Project }`
+- student: own project only
+- teacher/admin: any project
 
----
+Errors: `403`, `404`.
 
 #### `GET /api/fs/:projectId/tree`
 
-Project file tree. Directories come first, then files (sorted by name).
+Returns recursive tree where directories are listed before files.
 
-**Response `200`:**
+Example (`200`):
 
 ```json
 {
   "ok": true,
   "data": [
-    {
-      "name": "src",
-      "path": "src",
-      "type": "dir",
-      "children": [{ "name": "main.py", "path": "src/main.py", "type": "file" }]
-    },
+    { "name": "src", "path": "src", "type": "dir", "children": [] },
     { "name": "main.py", "path": "main.py", "type": "file" }
   ]
 }
 ```
 
----
-
 #### `GET /api/fs/:projectId/file?path=src/main.py`
 
-Get file contents.
+Query params:
 
-**Query params:** `path` — relative path from the project root (required).
+- `path` (required, relative to project root)
 
-**Response `200`:**
+Success (`200`):
 
 ```json
 {
@@ -622,13 +529,11 @@ Get file contents.
 }
 ```
 
----
+Errors: `400`, `403`, `404`.
 
 #### `PUT /api/fs/:projectId/file`
 
-Save file contents. Creates directories automatically. Forbidden for readonly projects.
-
-**Body:**
+Body:
 
 ```json
 {
@@ -637,15 +542,14 @@ Save file contents. Creates directories automatically. Forbidden for readonly pr
 }
 ```
 
-**Response `200`:** `{ "ok": true, "data": null }`
+Notes:
 
----
+- Creates directories if needed.
+- Denied for readonly project.
 
 #### `POST /api/fs/:projectId/file`
 
-Create an empty file or directory. Forbidden for readonly projects.
-
-**Body:**
+Body:
 
 ```json
 {
@@ -654,27 +558,20 @@ Create an empty file or directory. Forbidden for readonly projects.
 }
 ```
 
-Or `"type": "dir"` for a directory.
+Use `"type": "dir"` to create directory.
 
-**Response `201`:** `{ "ok": true, "data": null }`
+Errors:
 
-**Errors:** `409` — file/directory already exists.
-
----
+- `409` already exists
+- `403` readonly
 
 #### `DELETE /api/fs/:projectId/file?path=src/utils.py`
 
-Delete a file or directory (recursively). Forbidden for readonly projects.
-
-**Response `200`:** `{ "ok": true, "data": null }`
-
----
+Deletes file or directory recursively.
 
 #### `PATCH /api/fs/:projectId/rename`
 
-Rename or move a file/directory. Forbidden for readonly projects.
-
-**Body:**
+Body:
 
 ```json
 {
@@ -683,80 +580,58 @@ Rename or move a file/directory. Forbidden for readonly projects.
 }
 ```
 
-**Response `200`:** `{ "ok": true, "data": null }`
+All FS write routes enforce traversal and access checks.
 
 ---
 
-### 5.5 Tasks (`/api/tasks`)
+### 7.3 Tasks (`/api/tasks`)
 
-#### `POST /api/tasks`
+#### `POST /api/tasks` (`teacher`, `admin`)
 
-Create a task. Requires `teacher` or `admin` role.
-
-**Body:**
+Body:
 
 ```json
 {
-  "title": "Task 1: Sorting",
-  "description": "Task description...",
+  "title": "Task 1",
+  "description": "Solve...",
   "language": "python",
-  "templateCode": "# Write your solution",
+  "templateCode": "# write code",
   "timeLimitMin": 60
 }
 ```
 
-**Response `201`:** `{ "ok": true, "data": Task }`
+Constraints:
 
----
+- `timeLimitMin` from 5 to 300.
 
-#### `GET /api/tasks`
+#### `GET /api/tasks` (`teacher`, `admin`)
 
-List the teacher's tasks. Requires `teacher` or `admin` role.
-
-**Response `200`:** `{ "ok": true, "data": Task[] }`
-
----
+Returns teacher's own task list.
 
 #### `GET /api/tasks/:id`
 
-Task details. Students do not see hidden test cases.
+Student behavior:
 
-**Response `200`:** `{ "ok": true, "data": Task & { testCases: TestCase[] } }`
+- hidden test cases are removed from response.
 
----
+#### `PATCH /api/tasks/:id` (`teacher`, `admin`)
 
-#### `PATCH /api/tasks/:id`
+Only task author or admin can update.
 
-Update a task. Author only or `admin`.
+Updatable fields:
 
-**Body (all fields optional):**
+- `title`
+- `description`
+- `templateCode`
+- `timeLimitMin`
 
-```json
-{
-  "title": "New title",
-  "description": "...",
-  "templateCode": "...",
-  "timeLimitMin": 90
-}
-```
+#### `DELETE /api/tasks/:id` (`teacher`, `admin`)
 
-**Response `200`:** `{ "ok": true, "data": Task }`
+Only author/admin.
 
----
+#### `POST /api/tasks/:id/test-cases` (`teacher`, `admin`)
 
-#### `DELETE /api/tasks/:id`
-
-Delete a task. Author only or `admin`.
-
-**Response `200`:** `{ "ok": true, "data": null }`
-
----
-
-#### `POST /api/tasks/:id/test-cases`
-
-Add a test case to a task. Requires `teacher` or `admin` role.
-
-**Body:**
+Body:
 
 ```json
 {
@@ -768,121 +643,120 @@ Add a test case to a task. Requires `teacher` or `admin` role.
 }
 ```
 
-**Response `201`:** `{ "ok": true, "data": TestCase }`
+#### `PATCH /api/tasks/:id/test-cases/:tcId` (`teacher`, `admin`)
+
+Partial update allowed.
+
+#### `DELETE /api/tasks/:id/test-cases/:tcId` (`teacher`, `admin`)
+
+Removes test case.
 
 ---
 
-#### `PATCH /api/tasks/:id/test-cases/:tcId`
+### 7.4 Task Folders (`/api/task-folders`)
 
-Update a test case. Requires `teacher` or `admin` role.
+#### `GET /api/task-folders` (`teacher`, `admin`)
 
-**Body (all fields optional):**
+Returns teacher-created folders.
+
+#### `POST /api/task-folders` (`teacher`, `admin`)
+
+Body:
 
 ```json
-{
-  "input": "new input",
-  "expectedOutput": "new output",
-  "isHidden": false,
-  "points": 5
-}
+{ "name": "Algorithms" }
 ```
 
-**Response `200`:** `{ "ok": true, "data": TestCase }`
+#### `DELETE /api/task-folders/:id` (`teacher`, `admin`)
 
----
+Only folder owner or admin.
 
-#### `DELETE /api/tasks/:id/test-cases/:tcId`
+Behavior:
 
-Delete a test case. Requires `teacher` or `admin` role.
+- tasks remain, `folderId` becomes `null`.
 
-**Response `200`:** `{ "ok": true, "data": null }`
+#### `PATCH /api/task-folders/assign` (`teacher`, `admin`)
 
----
-
-### 5.6 Exams (`/api/exams`)
-
-#### `POST /api/exams`
-
-Create an exam. Requires `teacher` or `admin` role. An `inviteToken` is generated automatically.
-
-**Body:**
+Body:
 
 ```json
 {
   "taskId": "uuid",
-  "title": "Python Exam",
+  "folderId": "uuid-or-null"
+}
+```
+
+Assigns task to folder or removes assignment.
+
+---
+
+### 7.5 Exams (`/api/exams`)
+
+#### `POST /api/exams` (`teacher`, `admin`)
+
+Body:
+
+```json
+{
+  "groupId": "uuid",
+  "taskId": "uuid-optional",
+  "folderId": "uuid-optional",
+  "title": "Python Midterm",
   "openMode": "manual",
   "startsAt": "2026-05-01T09:00:00Z",
   "endsAt": "2026-05-01T11:00:00Z"
 }
 ```
 
-`openMode`: `"manual"` (opened manually) or `"scheduled"` (by schedule).
+Validation:
 
-**Response `201`:** `{ "ok": true, "data": Exam }`
+- `groupId` is required.
+- At least one of `taskId` or `folderId` must be set.
 
----
+Response includes generated invite token.
 
-#### `GET /api/exams`
+#### `GET /api/exams` (`teacher`, `admin`)
 
-List the teacher's exams. Requires `teacher` or `admin` role.
+Teacher/admin exam list.
 
-**Response `200`:** `{ "ok": true, "data": Exam[] }`
+#### `GET /api/exams/my` (student)
 
----
+Student exam list by own group.
 
-#### `GET /api/exams/:id`
+#### `GET /api/exams/my/:id` (student)
 
-Exam details. Requires `teacher` or `admin` role.
+Student can read exam only if exam group equals student's group.
 
-**Response `200`:** `{ "ok": true, "data": Exam }`
+#### `GET /api/exams/:id` (`teacher`, `admin`)
 
----
+Exam details.
 
-#### `PATCH /api/exams/:id/open`
+#### `PATCH /api/exams/:id/open` (`teacher`, `admin`)
 
-Open an exam (transition to `active`). Requires `teacher` or `admin` role.
+Moves exam to `active`.
 
-**Response `200`:** `{ "ok": true, "data": Exam }`
+#### `PATCH /api/exams/:id/close` (`teacher`, `admin`)
 
----
+Moves exam to `closed`.
 
-#### `PATCH /api/exams/:id/close`
+#### `GET /api/exams/:id/results` (`teacher`, `admin`)
 
-Close an exam. Requires `teacher` or `admin` role.
+Returns all exam sessions with submission and anti-cheat context.
 
-**Response `200`:** `{ "ok": true, "data": Exam }`
+#### `GET /api/exams/:id/sessions/:sessionId/anticheat` (`teacher`, `admin`)
 
----
-
-#### `GET /api/exams/:id/results`
-
-Summary results table for all students. Requires `teacher` or `admin` role.
-
-**Response `200`:** `{ "ok": true, "data": ExamSession[] }`
-
----
-
-#### `GET /api/exams/:id/sessions/:sessionId/anticheat`
-
-Anti-cheat event log for a specific session. Requires `teacher` or `admin` role.
-
-**Response `200`:** `{ "ok": true, "data": AntiCheatLog[] }`
-
----
+Returns anti-cheat event log for a specific session.
 
 #### `GET /api/exams/join/:token` (public)
 
-Exam info by invite link.
-
-**Response `200`:**
+Returns invite info:
 
 ```json
 {
   "ok": true,
   "data": {
     "id": "uuid",
-    "title": "Python Exam",
+    "title": "Python Midterm",
     "status": "active",
     "task": { "id": "uuid", "title": "...", "language": "python" },
     "openMode": "manual",
@@ -892,54 +766,76 @@ Exam info by invite link.
 }
 ```
 
+#### `POST /api/exams/join/:token` (student)
+
+Registers student as participant.
+
+Response:
+
+```json
+{ "ok": true, "data": { "examId": "uuid", "joined": true } }
+```
+
+Errors:
+
+- `403` exam closed
+- `404` exam not found
+
+#### `GET /api/exams/:id/events?token=<accessToken>` (`teacher`, `admin`)
+
+SSE stream for live monitoring.
+
+Event types:
+
+- `snapshot`
+- `update`
+- `ping`
+
 ---
 
-#### `POST /api/exams/join/:token`
-
-Join an exam by invite link. Requires JWT (student).
-
-**Response `200`:** `{ "ok": true, "data": { "examId": "uuid", "joined": true } }`
-
-**Errors:** `403` — exam is closed.
-
----
-
-### 5.7 Sessions (`/api/sessions`)
+### 7.6 Sessions (`/api/sessions`)
 
 #### `POST /api/sessions/:examId/start`
 
-Start an exam. Requires JWT. If a session already exists, it is returned (reconnection support). On first start, the student's project is automatically created in fs-service.
+Description:
 
-**Response `201`:** `{ "ok": true, "data": ExamSession & { projectId: string } }`
+- Starts exam session.
+- If session already exists, returns existing session.
+- Creates student project on first run.
 
-**Errors:** `403` — exam is not active, student not registered.
+Success (`201`):
 
----
+```json
+{ "ok": true, "data": { "id": "uuid", "projectId": "uuid", "status": "in_progress" } }
+```
+
+Errors:
+
+- `403` exam is not active / student is not participant
 
 #### `GET /api/sessions/:examId`
 
-Current user's session status.
-
-**Response `200`:** `{ "ok": true, "data": ExamSession }`
-
----
+Returns current user's session state.
 
 #### `POST /api/sessions/:examId/warn`
 
-Record an anti-cheat event. Requires JWT. 3 events → disqualification.
-
-**Body:**
+Body:
 
 ```json
 {
   "eventType": "tab_blur",
-  "details": { "url": "https://google.com" }
+  "details": { "durationMs": 7300 }
 }
 ```
 
-Allowed `eventType` values: `tab_blur`, `window_minimize`, `paste_attempt`, `devtools_open`.
+Allowed event types:
 
-**Response `200`:**
+- `tab_blur`
+- `window_minimize`
+- `paste_attempt`
+- `devtools_open`
+
+Response example:
 
 ```json
 {
@@ -953,15 +849,16 @@ Allowed `eventType` values: `tab_blur`, `window_minimize`, `paste_attempt`, `dev
 }
 ```
 
-On disqualification: `"disqualified": true`, project is frozen.
+At 3 warnings:
 
----
+- session status -> `disqualified`
+- project -> readonly
 
 #### `POST /api/sessions/:examId/run-tests`
 
-Run all task test cases against the student's code. Saves the first result as a `Submission`.
+Runs all test cases through runner-service.
 
-**Response `200`:**
+Response (`200`):
 
 ```json
 {
@@ -994,35 +891,48 @@ Run all task test cases against the student's code. Saves the first result as a 
 }
 ```
 
-`status`: `passed`, `partial`, `failed`.
+Notes:
 
----
+- Hidden tests are masked for students.
+- First run creates submission record.
+
+#### `POST /api/sessions/:examId/run-code`
+
+Runs code once without testcase scoring.
+
+Response fields:
+
+- `stdout`
+- `stderr`
+- `exitCode`
+- `durationMs`
+- `timedOut`
 
 #### `POST /api/sessions/:examId/submit`
 
-Submit work. Freezes the project (`isReadonly: true`). Session status → `submitted`.
+Submits session and locks project.
 
-**Response `200`:** `{ "ok": true, "data": { "submitted": true, "sessionId": "uuid" } }`
+Response:
 
----
+```json
+{ "ok": true, "data": { "submitted": true, "sessionId": "uuid" } }
+```
 
 #### `GET /api/sessions/:examId/result`
 
-Get submission result. Only for completed sessions.
+Returns submission for completed session.
 
-**Response `200`:** `{ "ok": true, "data": Submission }`
+Errors:
 
-**Errors:** `403` — exam not yet submitted.
+- `403` if session still in progress
 
 ---
 
-### 5.8 Code Runner (`/api/runner`)
+### 7.7 Runner (`/api/runner`)
 
 #### `POST /api/runner/run`
 
-One-off file execution. Requires JWT.
-
-**Body:**
+Body:
 
 ```json
 {
@@ -1033,7 +943,7 @@ One-off file execution. Requires JWT.
 }
 ```
 
-**Response `200`:**
+Response:
 
 ```json
 {
@@ -1048,15 +958,9 @@ One-off file execution. Requires JWT.
 }
 ```
 
-**Errors:** `401` — no JWT, `404` — project not found.
-
----
-
 #### `POST /api/runner/test` (internal)
 
-Run test cases. Called from task-service. No JWT required (inter-service call).
-
-**Body:**
+Body:
 
 ```json
 {
@@ -1068,29 +972,63 @@ Run test cases. Called from task-service. No JWT required (inter-service call).
 }
 ```
 
-**Response `200`:** `{ "ok": true, "data": TestResult[] }`
+Response:
+
+```json
+{
+  "ok": true,
+  "data": [
+    {
+      "index": 0,
+      "passed": true,
+      "input": "5\n3",
+      "expectedOutput": "8",
+      "actualOutput": "8",
+      "durationMs": 340,
+      "timedOut": false
+    }
+  ]
+}
+```
 
 ---
 
-### 5.9 Terminal (WebSocket)
+## 8. Realtime Interfaces (SSE and WebSocket)
 
-**URL:** `ws://localhost:4000/terminal/:projectId`
+### 8.1 Exam live updates (SSE)
 
-**Headers:** `x-user-id` and `x-user-role` (injected automatically by the gateway).
+Endpoint:
 
-After connecting, the server opens an interactive `sh` terminal inside a Docker container with the project files mounted.
+- `GET /api/exams/:id/events?token=<accessToken>`
 
-#### Incoming messages (client → server)
+Headers:
+
+- `Accept: text/event-stream`
+
+Server sends JSON payload in SSE `data`:
+
+- `snapshot` initial state
+- `update` when sessions changed
+- `ping` every ~15 seconds for keep-alive
+
+### 8.2 Interactive terminal (WebSocket)
+
+URLs:
+
+- Through gateway: `ws://localhost:4000/api/runner/terminal/:projectId`
+- Direct runner: `ws://localhost:3004/terminal/:projectId`
+
+Client -> server messages:
 
 ```json
 { "type": "input", "data": "ls\n" }
 ```
 
 ```json
-{ "type": "resize", "cols": 80, "rows": 24 }
+{ "type": "resize", "cols": 120, "rows": 30 }
 ```
 
-#### Outgoing messages (server → client)
+Server -> client messages:
 
 ```json
 { "type": "output", "data": "main.py\n" }
@@ -1104,27 +1042,20 @@ After connecting, the server opens an interactive `sh` terminal inside a Docker 
 { "type": "error", "message": "Project not found" }
 ```
 
-On connection, the server sends a welcome message:
-
-```
-✓ Terminal connected (python)
-$
-```
-
 ---
 
-## 6. Data Models
+## 9. Data Model Reference
 
 ### User
 
 ```typescript
 {
-  id: string; // UUID
+  id: string;
   email: string;
   fullName: string;
   role: "student" | "teacher" | "admin";
   groupId: string | null;
-  createdAt: string; // ISO 8601
+  createdAt: string;
 }
 ```
 
@@ -1132,10 +1063,10 @@ $
 
 ```typescript
 {
-  id: string
-  name: string         // unique, max 100 chars
-  createdAt: string
-  users?: User[]
+  id: string;
+  name: string;
+  createdAt: string;
+  users?: User[];
 }
 ```
 
@@ -1153,33 +1084,37 @@ $
 }
 ```
 
-### Task
-
-```typescript
-{
-  id: string
-  title: string
-  description: string
-  language: 'python' | 'javascript'
-  templateCode: string
-  timeLimitMin: number   // 5–300, default 60
-  createdBy: string      // teacher's userId
-  createdAt: string
-  testCases: TestCase[]
-}
-```
-
-### TestCase
+### Task and TestCase
 
 ```typescript
 {
   id: string;
-  taskId: string;
-  input: string;
-  expectedOutput: string;
-  isHidden: boolean; // hidden ones are not visible to students
-  points: number; // points for this test case
-  orderIndex: number;
+  title: string;
+  description: string;
+  language: "python" | "javascript";
+  templateCode: string;
+  timeLimitMin: number;
+  createdBy: string;
+  createdAt: string;
+  testCases: Array<{
+    id: string;
+    input: string;
+    expectedOutput: string;
+    isHidden: boolean;
+    points: number;
+    orderIndex: number;
+  }>;
+}
+```
+
+### TaskFolder
+
+```typescript
+{
+  id: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
 }
 ```
 
@@ -1188,9 +1123,11 @@ $
 ```typescript
 {
   id: string;
-  taskId: string;
+  groupId: string;
+  taskId: string | null;
+  folderId: string | null;
   title: string;
-  inviteToken: string; // nanoid(32), unique
+  inviteToken: string;
   openMode: "manual" | "scheduled";
   startsAt: string | null;
   endsAt: string | null;
@@ -1204,15 +1141,15 @@ $
 
 ```typescript
 {
-  id: string
-  examId: string
-  userId: string
-  projectId: string
-  startedAt: string
-  finishedAt: string | null
-  status: 'in_progress' | 'submitted' | 'disqualified'
-  warningsCount: number
-  submission?: Submission
+  id: string;
+  examId: string;
+  userId: string;
+  projectId: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: "in_progress" | "submitted" | "disqualified";
+  warningsCount: number;
+  submission?: Submission;
 }
 ```
 
@@ -1220,15 +1157,15 @@ $
 
 ```typescript
 {
-  id: string
-  sessionId: string
-  userId: string
-  taskId: string
-  score: number
-  maxScore: number
-  status: 'passed' | 'partial' | 'failed' | 'error'
-  resultsJson: TestResult[]
-  submittedAt: string
+  id: string;
+  sessionId: string;
+  userId: string;
+  taskId: string;
+  score: number;
+  maxScore: number;
+  status: "passed" | "partial" | "failed" | "error";
+  resultsJson: any[];
+  submittedAt: string;
 }
 ```
 
@@ -1245,157 +1182,91 @@ $
 }
 ```
 
-### FileNode
+---
 
-```typescript
-{
-  name: string
-  path: string           // relative path from project root
-  type: 'file' | 'dir'
-  children?: FileNode[]  // directories only
-}
-```
+## 10. Access Control Matrix
+
+| Route | student | teacher | admin |
+| --- | :---: | :---: | :---: |
+| `POST /api/auth/register` | ✓ | ✓ | ✓ |
+| `GET /api/auth/users` | - | - | ✓ |
+| `PATCH /api/auth/users/:id/role` | - | - | ✓ |
+| `GET /api/fs/projects/:id` | own | any | any |
+| `PUT /api/fs/:projectId/file` | own + writable | any | any |
+| `POST /api/tasks` | - | ✓ | ✓ |
+| `PATCH /api/tasks/:id` | - | author | ✓ |
+| `POST /api/exams` | - | ✓ | ✓ |
+| `GET /api/exams/:id/results` | - | ✓ | ✓ |
+| `POST /api/sessions/:examId/start` | ✓ | - | - |
+| `POST /api/sessions/:examId/warn` | ✓ | - | - |
+| `POST /api/sessions/:examId/submit` | ✓ | - | - |
+| `POST /api/runner/run` | ✓ | ✓ | ✓ |
 
 ---
 
-## 7. Roles & Access Control
+## 11. Anti-Cheat Workflow
 
-| Route                                     |      student       | teacher | admin |
-| ----------------------------------------- | :----------------: | :-----: | :---: |
-| `POST /auth/register`                     |         ✓          |    ✓    |   ✓   |
-| `GET /auth/me`                            |         ✓          |    ✓    |   ✓   |
-| `GET /auth/users`                         |         —          |    —    |   ✓   |
-| `GET /auth/users/:id`                     |         —          |    ✓    |   ✓   |
-| `PATCH /auth/users/:id/role`              |         —          |    —    |   ✓   |
-| `POST /auth/groups`                       |         —          |    —    |   ✓   |
-| `GET /auth/groups`                        |         —          |    ✓    |   ✓   |
-| `POST /auth/groups/:id/members`           |         —          |    ✓    |   ✓   |
-| `DELETE /auth/groups/:id/members/:userId` |         —          |    ✓    |   ✓   |
-| `POST /fs/projects`                       |         ✓          |    ✓    |   ✓   |
-| `GET /fs/:id/tree`                        |        own         |   any   |  any  |
-| `PUT /fs/:id/file`                        | own (non-readonly) |    ✓    |   ✓   |
-| `POST /tasks`                             |         —          |    ✓    |   ✓   |
-| `GET /tasks/:id`                          |   ✓ (no hidden)    |    ✓    |   ✓   |
-| `PATCH /tasks/:id`                        |         —          | author  |   ✓   |
-| `POST /tasks/:id/test-cases`              |         —          |    ✓    |   ✓   |
-| `POST /exams`                             |         —          |    ✓    |   ✓   |
-| `PATCH /exams/:id/open`                   |         —          |    ✓    |   ✓   |
-| `GET /exams/:id/results`                  |         —          |    ✓    |   ✓   |
-| `POST /sessions/:examId/start`            |         ✓          |    —    |   —   |
-| `POST /sessions/:examId/warn`             |         ✓          |    —    |   —   |
-| `POST /sessions/:examId/submit`           |         ✓          |    —    |   —   |
-| `POST /runner/run`                        |         ✓          |    ✓    |   ✓   |
+Tracked events:
 
-### Inter-service authentication
+- `tab_blur`
+- `window_minimize`
+- `paste_attempt`
+- `devtools_open`
 
-After JWT verification, the gateway injects these headers:
+Flow:
 
-```
-x-user-id:    <userId>
-x-user-email: <email>
-x-user-role:  <role>
-```
-
-Downstream services (fs, task, runner) read the user from these headers and have no direct access to the JWT.
+1. Frontend reports event via `/api/sessions/:examId/warn`.
+2. Session `warningsCount` is incremented.
+3. Log entry is written to `anticheat_logs`.
+4. On `warningsCount >= 3`, session becomes `disqualified`.
+5. Project is set readonly to prevent further edits.
+6. Teacher can inspect logs with `/api/exams/:id/sessions/:sessionId/anticheat`.
 
 ---
 
-## 8. Anti-Cheat System
+## 12. Code Execution Security Model
 
-The system records suspicious student actions during an exam.
+Execution isolation controls:
 
-**Tracked events:**
+- Docker container per run.
+- `--network=none`.
+- CPU/RAM/PID limits.
+- Read-only filesystem and tmpfs for temporary data.
+- Non-privileged user (`nobody`).
+- Timeout via `CODE_TIMEOUT_MS`.
+- Output limit (512 KB).
 
-| `eventType`       | Description                     |
-| ----------------- | ------------------------------- |
-| `tab_blur`        | Student switched to another tab |
-| `window_minimize` | Browser window was minimized    |
-| `paste_attempt`   | Attempted to paste text         |
-| `devtools_open`   | DevTools were opened            |
+Filesystem safeguards:
 
-**Warning logic:**
+- Paths are normalized.
+- Access validated against project root (`resolved.startsWith(root)`).
 
-- Each event → `warningsCount++` + entry in `anticheat_logs`.
-- When `warningsCount >= 3` → session status changes to `disqualified`, project is frozen.
-- The teacher can view the log via `GET /api/exams/:id/sessions/:sessionId/anticheat`.
+Concurrency:
 
----
-
-## 9. Code Execution Security
-
-Each user code execution is isolated as follows:
-
-1. **File copying** into a temporary directory `/tmp/grsu-run-<uuid>` before execution.
-2. **Docker container** with maximum restrictions (see table in section [4.5](#45-runner-service-port-3004)).
-3. **Timeout** — the process is killed via `SIGKILL` after `CODE_TIMEOUT_MS` elapses.
-4. **Output limit** — if output exceeds 512 KB, the process is killed.
-5. **Cleanup** — the temporary directory is deleted in a `finally` block in all cases.
-6. **Path traversal** — fs-service verifies that the resolved path starts with the project root.
+- Controlled by BullMQ + Redis.
+- Limited by `MAX_CONCURRENT_RUNS`.
 
 ---
 
-## 10. Shared Types
+## 13. Operational Notes and Documentation Policy
 
-The `@grsu/types` package (in `shared/types/`) is used by all services.
+### Operational recommendations
 
-```typescript
-// user.ts
-type UserRole = "student" | "teacher" | "admin";
-interface User {
-  id;
-  email;
-  fullName;
-  role;
-  groupId;
-  createdAt;
-}
-interface AuthTokens {
-  accessToken;
-  refreshToken;
-}
+- Keep gateway as the single external entry point.
+- Run DB client generation after schema changes:
+  - `npm run prisma:generate:all`
+- For auth-sensitive realtime calls, prefer short-lived access tokens and refresh flow.
 
-// jwt.ts
-interface JwtPayload {
-  sub;
-  email;
-  role;
-  iat;
-  exp;
-}
-interface GatewayHeaders {
-  "x-user-id": string;
-  "x-user-role": UserRole;
-  "x-user-email": string;
-}
+### Documentation update policy
 
-// response.ts
-interface ApiSuccess<T> {
-  ok: true;
-  data: T;
-}
-interface ApiError {
-  ok: false;
-  error: string;
-  code?: string;
-}
-type ApiResponse<T> = ApiSuccess<T> | ApiError;
+When endpoints or payloads change:
 
-// events.ts
-type AntiCheatEventType =
-  | "tab_blur"
-  | "window_minimize"
-  | "paste_attempt"
-  | "devtools_open";
-interface AntiCheatEvent {
-  sessionId;
-  userId;
-  eventType;
-  occurredAt;
-  details?;
-}
-interface ExamStatusChangedEvent {
-  examId;
-  status;
-  changedAt;
-}
-```
+1. Update route implementations first.
+2. Update this English documentation.
+3. Update Russian documentation with identical structure and scope.
+4. Verify that examples reflect real request validation rules.
+
+Source of truth for API behavior:
+
+- `services/*/src/routes/*.ts`
+- gateway public path logic in `services/gateway/src/index.ts`

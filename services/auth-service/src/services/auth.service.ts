@@ -19,12 +19,12 @@ export function createAuthService(app: FastifyInstance) {
         async login(email: string, password: string) {
             const user = await UserRepository.findByEmail(email)
             if (!user) {
-                throw { statusCode: 401, message: 'Неверный email или пароль' }
+                throw { statusCode: 404, message: 'Пользователь с таким email не найден' }
             }
 
             const valid = await bcrypt.compare(password, user.passwordHash)
             if (!valid) {
-                throw { statusCode: 401, message: 'Неверный email или пароль' }
+                throw { statusCode: 401, message: 'Неверный пароль' }
             }
 
             return this.generateTokens(user)

@@ -24,8 +24,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
         try {
             const user = getUser(req)
             const { examId } = req.params as { examId: string }
-            const session = await SessionRepository.findByExamAndUser(examId, user.id)
-            if (!session) return reply.status(404).send({ ok: false, error: 'Сессия не найдена' })
+            const session = await ExamService.getSession(examId, user.id)
             return reply.send({ ok: true, data: session })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
@@ -48,8 +47,10 @@ export async function sessionsRoutes(app: FastifyInstance) {
                 return reply.status(400).send({ ok: false, error: result.error.errors[0].message })
             }
 
-            const session = await SessionRepository.findByExamAndUser(examId, user.id)
-            if (!session) return reply.status(404).send({ ok: false, error: 'Сессия не найдена' })
+            const session = await ExamService.getSession(examId, user.id)
+            if (session.status !== 'in_progress') {
+                return reply.status(400).send({ ok: false, error: 'Сессия уже завершена' })
+            }
 
             const warnResult = await ExamService.warn(
                 session.id,
@@ -82,8 +83,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
             const user = getUser(req)
             const { examId } = req.params as { examId: string }
 
-            const session = await SessionRepository.findByExamAndUser(examId, user.id)
-            if (!session) return reply.status(404).send({ ok: false, error: 'Сессия не найдена' })
+            const session = await ExamService.getSession(examId, user.id)
             if (session.status !== 'in_progress') {
                 return reply.status(400).send({ ok: false, error: 'Сессия уже завершена' })
             }
@@ -159,8 +159,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
             const user = getUser(req)
             const { examId } = req.params as { examId: string }
 
-            const session = await SessionRepository.findByExamAndUser(examId, user.id)
-            if (!session) return reply.status(404).send({ ok: false, error: 'Сессия не найдена' })
+            const session = await ExamService.getSession(examId, user.id)
             if (session.status === 'in_progress') {
                 return reply.status(403).send({ ok: false, error: 'Экзамен ещё не сдан' })
             }
@@ -177,8 +176,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
             const user = getUser(req)
             const { examId } = req.params as { examId: string }
 
-            const session = await SessionRepository.findByExamAndUser(examId, user.id)
-            if (!session) return reply.status(404).send({ ok: false, error: 'Сессия не найдена' })
+            const session = await ExamService.getSession(examId, user.id)
             if (session.status !== 'in_progress') {
                 return reply.status(400).send({ ok: false, error: 'Сессия уже завершена' })
             }

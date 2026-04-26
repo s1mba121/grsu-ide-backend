@@ -52,7 +52,7 @@ export async function authRoutes(app: FastifyInstance) {
     app.post('/login', async (req, reply) => {
         const result = loginSchema.safeParse(req.body)
         if (!result.success) {
-            return reply.status(400).send({ ok: false, error: 'Некорректные данные' })
+            return reply.status(400).send({ ok: false, error: result.error.errors[0].message })
         }
 
         try {

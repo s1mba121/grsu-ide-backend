@@ -29,6 +29,22 @@ export const UserRepository = {
         })
     },
 
+    async updateProfile(id: string, data: { email?: string; fullName?: string }) {
+        return prisma.user.update({
+            where: { id },
+            data,
+            include: { group: true },
+        })
+    },
+
+    async updatePasswordHash(id: string, passwordHash: string) {
+        return prisma.user.update({
+            where: { id },
+            data: { passwordHash },
+            include: { group: true },
+        })
+    },
+
     async updateRole(id: string, role: Role) {
         return prisma.user.update({
             where: { id },

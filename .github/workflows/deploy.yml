@@ -1,0 +1,93 @@
+name: Build backend and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository }}
+  TAG: latest
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.GHCR_USERNAME }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/auth-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/auth-service:${{ env.TAG }}
+            ${{ env.IMAGE_PREFIX }}/auth-service:sha-${{ github.sha }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/fs-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/fs-service:${{ env.TAG }}
+            ${{ env.IMAGE_PREFIX }}/fs-service:sha-${{ github.sha }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/task-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/task-service:${{ env.TAG }}
+            ${{ env.IMAGE_PREFIX }}/task-service:sha-${{ github.sha }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/gateway/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/gateway:${{ env.TAG }}
+            ${{ env.IMAGE_PREFIX }}/gateway:sha-${{ github.sha }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: services/runner-service/Dockerfile
+          push: true
+          tags: |
+            ${{ env.IMAGE_PREFIX }}/runner-service:${{ env.TAG }}
+            ${{ env.IMAGE_PREFIX }}/runner-service:sha-${{ github.sha }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || '22' }}
+          script_stop: true
+          script: |
+            set -e
+            cd /opt/grsu-ide
+            docker login ghcr.io -u ${{ secrets.GHCR_USERNAME }} -p ${{ secrets.GHCR_TOKEN }}
+            docker compose --env-file .env -f deploy/docker-compose.prod.yml pull
+            docker compose --env-file .env -f deploy/docker-compose.prod.yml up -d --remove-orphans
+            docker compose --env-file .env -f deploy/docker-compose.prod.yml exec -T task-service npx prisma migrate deploy
+            docker image prune -f

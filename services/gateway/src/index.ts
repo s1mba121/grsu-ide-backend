@@ -122,6 +122,12 @@ await app.register(httpProxy, {
     rewritePrefix: '/task-folders',
 })
 
+await app.register(httpProxy, {
+    upstream: config.TASK_SERVICE_URL,
+    prefix: '/api/ai',
+    rewritePrefix: '/ai',
+})
+
 app.get('/health', async () => ({ status: 'ok', service: 'gateway' }))
 
 try {

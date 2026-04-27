@@ -9,6 +9,10 @@ const schema = z.object({
     AUTH_SERVICE_URL: z.string().default('http://auth-service:3001'),  // ← добавить
     SERVICE_KEY: z.string().default(''),                                // ← добавить
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+    /** OpenAI: если пусто — эндпоинты /ai вернут 503 */
+    OPENAI_API_KEY: z.string().optional().default(''),
+    /** Дешёвая модель по умолчанию (меньше расход токенов) */
+    OPENAI_MODEL: z.string().default('gpt-4o-mini'),
 })
 const parsed = schema.safeParse(process.env)
 if (!parsed.success) {

@@ -7,6 +7,7 @@ import { tasksRoutes } from './routes/tasks.routes.js'
 import { examsRoutes } from './routes/exams.routes.js'
 import { sessionsRoutes } from './routes/sessions.routes.js'
 import { taskFoldersRoutes } from './routes/task-folders.routes.js'
+import { aiRoutes } from './routes/ai.routes.js'
 
 const app = Fastify({
     logger: { level: config.NODE_ENV === 'development' ? 'info' : 'warn' }
@@ -18,6 +19,7 @@ await app.register(tasksRoutes, { prefix: '/tasks' })
 await app.register(examsRoutes, { prefix: '/exams' })
 await app.register(sessionsRoutes, { prefix: '/sessions' })
 await app.register(taskFoldersRoutes, { prefix: '/task-folders' })
+await app.register(aiRoutes, { prefix: '/ai' })
 
 app.get('/health', async () => ({ status: 'ok', service: 'task-service' }))
 

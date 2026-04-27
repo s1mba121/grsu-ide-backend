@@ -9,8 +9,15 @@ export const TaskRepository = {
         templateCode: string
         timeLimitMin: number
         createdBy: string
+        folderId?: string | null
     }) {
-        return prisma.task.create({ data })
+        const { folderId, ...rest } = data
+        return prisma.task.create({
+            data: {
+                ...rest,
+                ...(folderId !== undefined && folderId !== null ? { folderId } : {}),
+            },
+        })
     },
 
     async findById(id: string) {

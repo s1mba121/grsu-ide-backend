@@ -67,9 +67,11 @@ services:
       AUTH_SERVICE_URL: http://auth-service:3001
       SERVICE_KEY: task-service-secret
       NODE_ENV: development
-      # OpenAI (опционально): без ключа эндпоинты /api/ai вернут 503
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      # Gemini (опционально): без ключа эндпоинты /api/ai вернут 503
+      GEMINI_API_KEYS: ${GEMINI_API_KEYS:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
     ports:
       - "3003:3003"
     depends_on:

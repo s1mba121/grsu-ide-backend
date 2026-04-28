@@ -4,7 +4,7 @@ import type { Language } from '@prisma/client'
 import { getUser, requireRole } from '../middlewares/auth.middleware.js'
 import { TaskRepository } from '../repositories/task.repository.js'
 import { prisma } from '../db.js'
-import { chatCompletion, parseJsonFromModelContent } from '../services/openai.client.js'
+import { chatCompletion, parseJsonFromModelContent } from '../services/gemini.client.js'
 
 const genTaskItem = z.object({
     title: z.string().min(1).max(255),
@@ -105,6 +105,43 @@ async function reconcileGeneratedTestCases(language: string, tasks: GenTaskItem[
         out = await Promise.all(out.map(t => reconcileOneTaskTestCases(language, t, pass)))
     }
     return out
+}
+
+/**
+ * Надёжный разбор JSON от модели: сначала основной ответ, затем ретрай с большим лимитом,
+ * затем попытка "починки" уже полученного текста до валидного JSON.
+ */
+async function generateAndParseJsonWithRetry<T>(
+    system: string,
+    user: string,
+    initialMaxTokens = 8192,
+): Promise<T> {
+    const tokenPlan = [initialMaxTokens, Math.max(initialMaxTokens, 12288)]
+    let lastRaw = ''
+    let lastErr: unknown
+
+    for (const mt of tokenPlan) {
+        try {
+            lastRaw = await chatCompletion(system, user, { jsonObject: true, maxTokens: mt })
+            return parseJsonFromModelContent(lastRaw) as T
+        } catch (e) {
+            lastErr = e
+        }
+    }
+
+    if (lastRaw.trim()) {
+        try {
+            const repairSystem =
+                'Исправь полученный ниже текст до СТРОГО валидного JSON, без markdown и без пояснений. ' +
+                'Нельзя придумывать новые сущности: только восстановить синтаксис и экранирование.'
+            const repairedRaw = await chatCompletion(repairSystem, lastRaw, { jsonObject: true, maxTokens: 12288 })
+            return parseJsonFromModelContent(repairedRaw) as T
+        } catch (e) {
+            lastErr = e
+        }
+    }
+
+    throw (lastErr instanceof Error ? lastErr : new Error('Не удалось получить валидный JSON от модели'))
 }
 
 export async function aiRoutes(app: FastifyInstance) {
@@ -288,11 +325,7 @@ ${b.withTests ? `КРИТИЧЕСКИ про testCases (если массив н
                 extraPrompt: b.extraPrompt ?? '',
             })
 
-            const raw = await chatCompletion(system, `Параметры:\n${userPayload}`, {
-                jsonObject: true,
-                maxTokens: 8192,
-            })
-            const json = parseJsonFromModelContent(raw) as { tasks?: unknown[] }
+            const json = await generateAndParseJsonWithRetry<{ tasks?: unknown[] }>(system, `Параметры:\n${userPayload}`, 8192)
             if (!Array.isArray(json.tasks) || json.tasks.length === 0) {
                 return reply.status(502).send({ ok: false, error: 'Модель вернула пустой или неверный список tasks' })
             }

@@ -1,70 +1,55 @@
 import { config } from '../config.js'
 
-const OPENAI_URL = 'https://api.openai.com/v1/chat/completions'
+let geminiKeyIndex = 0
+
+function getGeminiGenerateContentUrl(): string {
+    const base = config.GEMINI_BASE_URL.replace(/\/+$/, '')
+    const model = encodeURIComponent(config.GEMINI_MODEL)
+    return `${base}/models/${model}:generateContent`
+}
 
 function previewSnippet(s: string, max = 320): string {
     const t = s.replace(/\s+/g, ' ').trim()
     return t.length <= max ? t : `${t.slice(0, max)}…`
 }
 
-/** Текст ответа ассистента: строка или массив фрагментов (новые модели / API). */
-function assistantContentToString(content: unknown): string {
-    if (typeof content === 'string') return content
-    if (content === null || content === undefined) return ''
-    if (!Array.isArray(content)) return ''
-    const chunks: string[] = []
-    for (const part of content) {
-        if (typeof part !== 'object' || part === null) continue
-        const p = part as { type?: string; text?: string; content?: string }
-        if (typeof p.text === 'string' && p.text.length) {
-            chunks.push(p.text)
-            continue
+function pickGeminiApiKey(): string {
+    const keys = config.GEMINI_API_KEYS
+    if (!keys.length) {
+        const err = new Error('Gemini не настроен: задайте GEMINI_API_KEYS или GEMINI_API_KEY для task-service') as Error & {
+            statusCode?: number
         }
-        if (typeof p.content === 'string' && p.content.length) chunks.push(p.content)
-    }
-    return chunks.join('')
-}
-
-type ChatChoiceMessage = {
-    content?: unknown
-    refusal?: string | null
-}
-
-type ChatCompletionPayload = {
-    error?: { message?: string }
-    choices?: Array<{
-        message?: ChatChoiceMessage
-        /** legacy completions */
-        text?: string
-    }>
-}
-
-function extractAssistantText(data: ChatCompletionPayload): string {
-    if (data.error?.message) {
-        const err = new Error(`OpenAI: ${data.error.message}`) as Error & { statusCode?: number }
-        err.statusCode = 502
-        throw err
-    }
-    const choice = data.choices?.[0]
-    const refusal = choice?.message?.refusal
-    if (typeof refusal === 'string' && refusal.trim()) {
-        const err = new Error(`Модель отказалась ответить: ${previewSnippet(refusal, 400)}`) as Error & { statusCode?: number }
-        err.statusCode = 502
-        throw err
-    }
-    const fromMessage = assistantContentToString(choice?.message?.content)
-    if (fromMessage.trim()) return fromMessage
-    const legacy = choice?.text
-    if (typeof legacy === 'string' && legacy.trim()) return legacy
-    return ''
-}
-
-export function assertOpenAiConfigured(): void {
-    if (!config.OPENAI_API_KEY?.trim()) {
-        const err = new Error('OpenAI не настроен: задайте OPENAI_API_KEY для task-service') as Error & { statusCode?: number }
         err.statusCode = 503
         throw err
     }
+    const key = keys[geminiKeyIndex % keys.length]
+    geminiKeyIndex = (geminiKeyIndex + 1) % keys.length
+    return key
+}
+
+type GeminiPart = { text?: string }
+type GeminiContent = { parts?: GeminiPart[] }
+type GeminiCandidate = { content?: GeminiContent; finishReason?: string }
+type GeminiPayload = {
+    error?: { message?: string }
+    candidates?: GeminiCandidate[]
+    promptFeedback?: { blockReason?: string }
+}
+
+function extractGeminiText(data: GeminiPayload): string {
+    if (data.error?.message) {
+        const err = new Error(`Gemini: ${data.error.message}`) as Error & { statusCode?: number }
+        err.statusCode = 502
+        throw err
+    }
+    const blocked = data.promptFeedback?.blockReason
+    if (blocked) {
+        const err = new Error(`Gemini заблокировал запрос: ${blocked}`) as Error & { statusCode?: number }
+        err.statusCode = 502
+        throw err
+    }
+    const parts = data.candidates?.[0]?.content?.parts ?? []
+    return parts.map(p => (typeof p.text === 'string' ? p.text : '')).join('').trim()
 }
 
 /**
@@ -130,7 +115,6 @@ export function parseJsonFromModelContent(raw: string): unknown {
     const bomStripped = raw.replace(/^\uFEFF/, '').trim()
     let trimmed = bomStripped
     const fence = bomStripped.match(/```(?:json)?\s*([\s\S]*?)```/i)
-    // Не подменять весь ответ пустым fenced-блоком (тогда теряется JSON после ```).
     if (fence) {
         const inner = fence[1].trim()
         if (inner.length > 0) trimmed = inner
@@ -156,51 +140,46 @@ export function parseJsonFromModelContent(raw: string): unknown {
         }
         const hint = previewSnippet(bomStripped, 400)
         const base = e instanceof Error ? e.message : String(e)
-        throw new SyntaxError(
-            hint.length ? `${base} (ответ: ${hint})` : base,
-        )
+        throw new SyntaxError(hint.length ? `${base} (ответ: ${hint})` : base)
     }
 }
 
 export type ChatCompletionOptions = {
-    /** Гарантирует синтаксически валидный JSON-объект от API (Chat Completions). */
     jsonObject?: boolean
-    /** Лимит токенов ответа (по умолчанию 4096; для больших JSON — больше). */
     maxTokens?: number
 }
 
 export async function chatCompletion(system: string, user: string, options?: ChatCompletionOptions): Promise<string> {
-    assertOpenAiConfigured()
-    const body: Record<string, unknown> = {
-        model: config.OPENAI_MODEL,
-        messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-        ],
+    const generationConfig: Record<string, unknown> = {
         temperature: 0.35,
-        max_tokens: options?.maxTokens ?? 4096,
+        maxOutputTokens: options?.maxTokens ?? 4096,
     }
     if (options?.jsonObject) {
-        body.response_format = { type: 'json_object' }
+        generationConfig.responseMimeType = 'application/json'
     }
-    const res = await fetch(OPENAI_URL, {
+    const body = {
+        systemInstruction: { role: 'system', parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: user }] }],
+        generationConfig,
+    }
+    const res = await fetch(getGeminiGenerateContentUrl(), {
         method: 'POST',
         headers: {
-            Authorization: `Bearer ${config.OPENAI_API_KEY}`,
+            'x-goog-api-key': pickGeminiApiKey(),
             'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
     })
     if (!res.ok) {
         const t = await res.text()
-        const err = new Error(`OpenAI HTTP ${res.status}: ${t.slice(0, 400)}`) as Error & { statusCode?: number }
+        const err = new Error(`Gemini HTTP ${res.status}: ${t.slice(0, 600)}`) as Error & { statusCode?: number }
         err.statusCode = 502
         throw err
     }
-    const data = (await res.json()) as ChatCompletionPayload
-    const content = extractAssistantText(data).trim()
+    const data = (await res.json()) as GeminiPayload
+    const content = extractGeminiText(data)
     if (!content) {
-        const err = new Error('Пустой ответ от OpenAI (нет текста в choices[0].message)') as Error & {
+        const err = new Error('Пустой ответ от Gemini (нет текста в candidates[0].content.parts)') as Error & {
             statusCode?: number
         }
         err.statusCode = 502

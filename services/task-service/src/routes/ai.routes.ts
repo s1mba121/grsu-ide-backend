@@ -31,7 +31,7 @@ function clip(s: string, max: number): string {
     return `${s.slice(0, max)}\n…[обрезано]`
 }
 
-const RECONCILE_PASSES = 2
+const RECONCILE_PASSES = 1
 
 /**
  * Один вызов модели на одну задачу: выровнять testCases по description и templateCode.
@@ -339,10 +339,12 @@ ${b.withTests ? `КРИТИЧЕСКИ про testCases (если массив н
                 return reply.status(502).send({ ok: false, error: 'Не удалось разобрать ни одного задания из ответа модели' })
             }
 
-            const itemsFinal =
-                b.withTests && items.some(d => d.testCases?.length)
-                    ? await reconcileGeneratedTestCases(b.language, items)
-                    : items
+            // Под Cloudflare длинные синхронные запросы легко упираются в timeout.
+            // Поэтому делаем reconcile только для небольших пакетов.
+            const canReconcile = b.withTests && items.some(d => d.testCases?.length) && items.length <= 5
+            const itemsFinal = canReconcile
+                ? await reconcileGeneratedTestCases(b.language, items)
+                : items
 
             const created = []
             for (const d of itemsFinal) {

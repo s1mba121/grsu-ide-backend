@@ -14,22 +14,22 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
 
   auth-service:
     build:
       context: .                              # ← корень монорепо
       dockerfile: services/auth-service/Dockerfile
     environment:
-      PORT: 3001
+      PORT: 4001
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_auth
       JWT_ACCESS_SECRET: dev_access_secret_change_in_prod
       JWT_REFRESH_SECRET: dev_refresh_secret_change_in_prod
       SERVICE_KEY: task-service-secret
       NODE_ENV: development
     ports:
-      - "3001:3001"
+      - "4001:4001"
     depends_on:
       - postgres
     develop:
@@ -43,12 +43,12 @@ services:
       context: .
       dockerfile: services/fs-service/Dockerfile
     environment:
-      PORT: 3002
+      PORT: 4002
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_fs
       STORAGE_PATH: /storage
       NODE_ENV: development
     ports:
-      - "3002:3002"
+      - "4002:4002"
     volumes:
       - fs_storage:/storage
     depends_on:
@@ -59,12 +59,12 @@ services:
       context: .
       dockerfile: services/task-service/Dockerfile
     environment:
-      PORT: 3003
+      PORT: 4003
       DATABASE_URL: postgresql://grsu:grsu_secret@postgres:5432/grsu_ide_tasks
-      FS_SERVICE_URL: http://fs-service:3002
-      RUNNER_SERVICE_URL: http://runner-service:3004
-      UTH_SERVICE_URL: http://auth-service:3001
-      AUTH_SERVICE_URL: http://auth-service:3001
+      FS_SERVICE_URL: http://fs-service:4002
+      RUNNER_SERVICE_URL: http://runner-service:4004
+      UTH_SERVICE_URL: http://auth-service:4001
+      AUTH_SERVICE_URL: http://auth-service:4001
       SERVICE_KEY: task-service-secret
       NODE_ENV: development
       # Gemini (опционально): без ключа эндпоинты /api/ai вернут 503
@@ -73,7 +73,7 @@ services:
       GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-flash-preview}
     ports:
-      - "3003:3003"
+      - "4003:4003"
     depends_on:
       - postgres
       - fs-service
@@ -85,10 +85,10 @@ services:
     environment:
       PORT: 4000
       JWT_ACCESS_SECRET: dev_access_secret_change_in_prod
-      AUTH_SERVICE_URL: http://auth-service:3001
-      FS_SERVICE_URL: http://fs-service:3002
-      TASK_SERVICE_URL: http://task-service:3003
-      RUNNER_SERVICE_URL: http://runner-service:3004
+      AUTH_SERVICE_URL: http://auth-service:4001
+      FS_SERVICE_URL: http://fs-service:4002
+      TASK_SERVICE_URL: http://task-service:4003
+      RUNNER_SERVICE_URL: http://runner-service:4004
       NODE_ENV: development
     ports:
       - "4000:4000"
@@ -100,16 +100,16 @@ services:
       context: .
       dockerfile: services/runner-service/Dockerfile
     environment:
-      PORT: 3004
+      PORT: 4004
       REDIS_URL: redis://redis:6379
-      FS_SERVICE_URL: http://fs-service:3002
+      FS_SERVICE_URL: http://fs-service:4002
       STORAGE_PATH: /storage
       HOST_STORAGE_PATH: /var/lib/docker/volumes/grsu-ide-backend_fs_storage/_data
       CODE_TIMEOUT_MS: 15000
       MAX_CONCURRENT_RUNS: 5
       NODE_ENV: development
     ports:
-      - "3004:3004"
+      - "4004:4004"
     volumes:
       - fs_storage:/storage
       - /var/run/docker.sock:/var/run/docker.sock  # даём доступ к Docker хоста

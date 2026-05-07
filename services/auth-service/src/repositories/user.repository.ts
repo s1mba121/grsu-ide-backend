@@ -52,10 +52,43 @@ export const UserRepository = {
         })
     },
 
+    async setBan(id: string, banned: boolean) {
+        return prisma.user.update({
+            where: { id },
+            data: { bannedAt: banned ? new Date() : null },
+            include: { group: true },
+        })
+    },
+
+    async deleteById(id: string) {
+        return prisma.user.delete({
+            where: { id },
+        })
+    },
+
     async findAll() {
         return prisma.user.findMany({
             include: { group: true },
             orderBy: { createdAt: 'desc' },
+        })
+    },
+
+    async search(params: { q?: string; role?: Role; status?: 'active' | 'banned' | 'all' }) {
+        const q = params.q?.trim()
+        return prisma.user.findMany({
+            where: {
+                ...(params.role ? { role: params.role } : {}),
+                ...(params.status === 'active' ? { bannedAt: null } : {}),
+                ...(params.status === 'banned' ? { NOT: { bannedAt: null } } : {}),
+                ...(q ? {
+                    OR: [
+                        { fullName: { contains: q, mode: 'insensitive' } },
+                        { email: { contains: q, mode: 'insensitive' } },
+                    ],
+                } : {}),
+            },
+            include: { group: true },
+            orderBy: [{ bannedAt: 'desc' }, { createdAt: 'desc' }],
         })
     },
 }

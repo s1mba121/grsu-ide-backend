@@ -21,6 +21,9 @@ export function createAuthService(app: FastifyInstance) {
             if (!user) {
                 throw { statusCode: 404, message: 'Пользователь с таким email не найден' }
             }
+            if (user.bannedAt) {
+                throw { statusCode: 403, message: 'Пользователь заблокирован' }
+            }
 
             const valid = await bcrypt.compare(password, user.passwordHash)
             if (!valid) {

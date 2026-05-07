@@ -22,6 +22,7 @@ model User {
   fullName     String    @db.VarChar(255) @map("full_name")
   passwordHash String    @db.VarChar(255) @map("password_hash")
   role         Role      @default(student)
+  bannedAt     DateTime? @map("banned_at")
   groupId      String?   @map("group_id")
   group        Group?    @relation(fields: [groupId], references: [id])
   createdAt    DateTime  @default(now()) @map("created_at")

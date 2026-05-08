@@ -131,13 +131,20 @@ export const ExamService = {
         return ExamRepository.create({ ...data, inviteToken })
     },
 
-    async startSession(examId: string, userId: string) {
+    async startSession(examId: string, userId: string, userGroupId?: string) {
         const exam = await ExamRepository.findById(examId)
         if (!exam) throw { statusCode: 404, message: 'Экзамен не найден' }
         if (exam.status !== 'active') throw { statusCode: 403, message: 'Экзамен не активен' }
 
         const isParticipant = await ExamRepository.isParticipant(examId, userId)
-        if (!isParticipant) throw { statusCode: 403, message: 'Вы не зарегистрированы на этот экзамен' }
+        if (!isParticipant) {
+            // Если студент зарегистрировался после открытия экзамена, добавляем его динамически,
+            // но только если его группа совпадает с группой экзамена.
+            if (!userGroupId || userGroupId !== exam.groupId) {
+                throw { statusCode: 403, message: 'Вы не зарегистрированы на этот экзамен' }
+            }
+            await ExamRepository.addParticipantsBulk(examId, [{ id: userId, fullName: '', email: '' }])
+        }
 
         const existing = await SessionRepository.findByExamAndUser(examId, userId)
         if (existing) {
@@ -225,6 +232,50 @@ export const ExamService = {
         await freezeProject(userId, session.projectId)
 
         return { submitted: true, sessionId: session.id }
+    },
+
+    async closeExam(examId: string, closedAt: Date = new Date()) {
+        const exam = await ExamRepository.findById(examId)
+        if (!exam) throw { statusCode: 404, message: 'Экзамен не найден' }
+
+        const inProgressSessions = await prisma.examSession.findMany({
+            where: { examId, status: 'in_progress' },
+            include: {
+                submission: true,
+                task: {
+                    include: {
+                        testCases: {
+                            select: { points: true },
+                        },
+                    },
+                },
+            },
+        })
+
+        await Promise.all(
+            inProgressSessions.map(async (session) => {
+                if (!session.submission && session.taskId) {
+                    const maxScore = session.task?.testCases.reduce((sum, tc) => sum + tc.points, 0) ?? 0
+                    await SessionRepository.createSubmission({
+                        sessionId: session.id,
+                        userId: session.userId,
+                        taskId: session.taskId,
+                        score: 0,
+                        maxScore,
+                        status: 'failed',
+                        resultsJson: [],
+                    })
+                }
+
+                await SessionRepository.updateStatus(session.id, 'submitted', closedAt)
+            })
+        )
+
+        await Promise.allSettled(
+            inProgressSessions.map((session) => freezeProject(session.userId, session.projectId))
+        )
+
+        return ExamRepository.updateStatus(examId, 'closed', closedAt)
     },
 
     // exam.service.ts

@@ -8,6 +8,7 @@ import { examsRoutes } from './routes/exams.routes.js'
 import { sessionsRoutes } from './routes/sessions.routes.js'
 import { taskFoldersRoutes } from './routes/task-folders.routes.js'
 import { aiRoutes } from './routes/ai.routes.js'
+import { closeDueExams } from './services/exam-scheduler.service.js'
 
 const app = Fastify({
     logger: { level: config.NODE_ENV === 'development' ? 'info' : 'warn' }
@@ -23,7 +24,13 @@ await app.register(aiRoutes, { prefix: '/ai' })
 
 app.get('/health', async () => ({ status: 'ok', service: 'task-service' }))
 
+const autoCloseInterval = setInterval(() => {
+    void closeDueExams()
+}, 30 * 1000)
+void closeDueExams()
+
 const shutdown = async () => {
+    clearInterval(autoCloseInterval)
     await app.close()
     await prisma.$disconnect()
     process.exit(0)

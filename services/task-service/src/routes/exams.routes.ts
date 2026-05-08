@@ -220,7 +220,7 @@ export async function examsRoutes(app: FastifyInstance) {
     app.patch('/:id/close', { preHandler: requireRole(['teacher', 'admin']) }, async (req, reply) => {
         try {
             const { id } = req.params as { id: string }
-            const exam = await ExamRepository.updateStatus(id, 'closed', new Date())
+            const exam = await ExamService.closeExam(id)
             return reply.send({ ok: true, data: exam })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })

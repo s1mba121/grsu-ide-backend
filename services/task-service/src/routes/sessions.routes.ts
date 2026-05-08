@@ -12,7 +12,7 @@ export async function sessionsRoutes(app: FastifyInstance) {
         try {
             const user = getUser(req)
             const { examId } = req.params as { examId: string }
-            const session = await ExamService.startSession(examId, user.id)
+            const session = await ExamService.startSession(examId, user.id, user.groupId)
             return reply.status(201).send({ ok: true, data: session })
         } catch (err: any) {
             return reply.status(err.statusCode ?? 500).send({ ok: false, error: err.message })
@@ -107,9 +107,10 @@ export async function sessionsRoutes(app: FastifyInstance) {
             )
 
             // Считаем баллы
-            const score = results
-                .filter((r, i) => r.passed)
-                .reduce((sum, _, i) => sum + (task.testCases[i]?.points ?? 1), 0)
+            const score = results.reduce(
+                (sum, result, index) => sum + (result.passed ? (task.testCases[index]?.points ?? 1) : 0),
+                0
+            )
             const maxScore = task.testCases.reduce((sum, tc) => sum + tc.points, 0)
 
             const passed = score === maxScore
